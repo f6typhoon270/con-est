@@ -1,0 +1,1622 @@
+<title>Con Est</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-screen tool. Plan viewer fills the left, takeoff/rates/quote panel on the right; stacks on phones. */
+:root{
+  --bg:#E9ECEF; --panel:#FFFFFF; --ink:#18212C; --muted:#5A6573; --line:#D2D8DF;
+  --accent:#1F5FD1; --accent-ink:#FFFFFF; --accent-soft:#E3ECFB; --plan:#D7DCE2;
+  --warn:#A34A06; --warn-soft:#FDF0E1; --good:#1E7B4B; --danger:#B42318;
+  --f-ui:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-head:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11151B; --panel:#1A2029; --ink:#E5E9EF; --muted:#97A2B1; --line:#2C3543;
+  --accent:#6B9AF2; --accent-ink:#0C1320; --accent-soft:#1D2A42; --plan:#0B0E12;
+  --warn:#F2A65A; --warn-soft:#3A2814; --good:#4CC38A; --danger:#F97066; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11151B; --panel:#1A2029; --ink:#E5E9EF; --muted:#97A2B1; --line:#2C3543;
+  --accent:#6B9AF2; --accent-ink:#0C1320; --accent-soft:#1D2A42; --plan:#0B0E12;
+  --warn:#F2A65A; --warn-soft:#3A2814; --good:#4CC38A; --danger:#F97066; color-scheme:dark}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;display:flex;flex-direction:column;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+
+header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-block:8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{font-family:var(--f-head);font-weight:700;font-size:22px;letter-spacing:.02em;display:flex;align-items:center;gap:8px}
+.brand i{display:inline-block;width:18px;height:18px;background:var(--accent);border-radius:3px;transform:skewX(-12deg)}
+.job{display:flex;gap:6px;align-items:center;flex-wrap:wrap;flex:1;min-width:0}
+.job select{max-width:240px;min-width:0}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 11px;line-height:1.2;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn.danger{color:var(--danger)}
+.btn.sm{padding:3px 8px;font-size:13px}
+select,input[type=text],input[type=number],textarea{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:5px 8px}
+input[type=number]{width:84px}
+
+.toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-block:6px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--panel);border-bottom:1px solid var(--line)}
+.tools{display:flex;border:1px solid var(--line);border-radius:7px;overflow-x:auto;max-width:100%}
+.tools button{flex:none}
+.tools button{border:0;background:transparent;padding:6px 11px;border-right:1px solid var(--line);font-weight:500}
+.tools button:last-child{border-right:0}
+.tools button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+.sep{width:1px;height:24px;background:var(--line);margin-inline:2px}
+.opts{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:14px;color:var(--muted)}
+.opts label{display:flex;gap:5px;align-items:center}
+.opts select,.opts input{color:var(--ink)}
+
+main{flex:1;display:flex;min-height:0}
+.viewer{flex:1;position:relative;min-width:0;background:var(--plan)}
+.scroller{position:absolute;inset:0;overflow:auto;touch-action:pan-x pan-y}
+.stage{position:relative;margin:16px;display:inline-block;box-shadow:0 1px 6px rgba(0,0,0,.25);background:#fff}
+.stage canvas{display:block}
+.stage svg{position:absolute;inset:0;overflow:visible}
+.viewer[data-tool=pan] .scroller{cursor:grab}
+.viewer[data-tool=pan].dragging .scroller{cursor:grabbing}
+.viewer:not([data-tool=pan]) svg{cursor:crosshair}
+.hud{position:absolute;left:12px;bottom:12px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;pointer-events:none}
+.hud>*{pointer-events:auto}
+.readout{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:14px;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.drawbar{display:flex;gap:6px}
+.pager{position:absolute;right:12px;bottom:12px;display:flex;gap:6px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:14px}
+.banner{position:absolute;left:12px;right:12px;top:12px;background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn);border-radius:6px;padding:8px 12px;font-weight:500}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--muted);padding:24px}
+
+aside{width:380px;max-width:100%;display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--line);min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:0;background:transparent;padding:10px 6px;font-family:var(--f-head);font-weight:600;font-size:17px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);border-bottom:3px solid transparent}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+.pane{flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:14px;min-height:0}
+.pane h3{margin:0;font-family:var(--f-head);font-weight:600;font-size:16px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.group{display:flex;flex-direction:column;gap:6px}
+.ghead{display:flex;align-items:center;gap:8px;font-weight:600}
+.ghead .sw{width:12px;height:12px;border-radius:3px;flex:none}
+.ghead .tot{margin-left:auto}
+.row{display:grid;grid-template-columns:1fr auto;gap:4px 8px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;cursor:pointer}
+.row.sel{border-color:var(--accent);background:var(--accent-soft)}
+.row .nm{border:0;background:transparent;padding:0;font-weight:500;min-width:0;width:100%}
+.row .q{text-align:right}
+.row .meta{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted)}
+.row .meta input[type=number]{width:70px;padding:2px 6px}
+.row .meta select{padding:2px 6px;font-size:13px}
+.muted{color:var(--muted)}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:1px 7px;border-radius:999px;background:var(--warn-soft);color:var(--warn)}
+.warns{display:flex;flex-direction:column;gap:6px}
+.warns div{background:var(--warn-soft);color:var(--warn);border-radius:6px;padding:7px 10px;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-weight:600;text-align:left;color:var(--muted);font-size:12px;letter-spacing:.04em;text-transform:uppercase;padding:4px 4px;border-bottom:1px solid var(--line)}
+td{padding:6px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.r,th.r{text-align:right}
+.rates td input[type=text]{width:100%;min-width:0}
+.rates td input[type=number]{width:72px}
+.rates input[type=color]{width:28px;height:26px;padding:0;border:1px solid var(--line);border-radius:4px;background:none}
+.totals{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:15px}
+.totals .big{font-family:var(--f-head);font-weight:700;font-size:24px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.hint{font-size:13px;color:var(--muted);line-height:1.45}
+.modal{position:fixed;inset:0;background:rgba(10,14,20,.5);display:grid;place-items:center;z-index:50;padding:16px}
+.modal .box{background:var(--panel);border-radius:10px;padding:18px;width:min(460px,100%);display:flex;flex-direction:column;gap:12px;max-height:90%;overflow:auto}
+.modal h2{margin:0;font-family:var(--f-head);font-size:22px}
+.modal textarea{width:100%;min-height:160px;font-family:var(--f-num);font-size:12px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;z-index:60;font-weight:500}
+
+@media (max-width:820px){
+  body{overflow:auto;height:auto}
+  main{flex-direction:column}
+  .viewer{height:62vh;flex:none}
+  aside{width:auto;border-left:0;border-top:1px solid var(--line)}
+  .pane{overflow:visible}
+  .tools button{padding:6px 8px}
+}
+
+/* ---------- app shell: sidebar + views (jobs, dashboard, schedule) ---------- */
+body{margin:0}
+.shell{display:flex;flex:1;min-height:0}
+.side{width:200px;flex:none;background:#14202E;color:#C9D3DF;display:flex;flex-direction:column;gap:2px;padding:12px 10px;padding-left:max(10px,env(safe-area-inset-left,0px))}
+.side .brand{color:#fff;padding:4px 8px 14px}
+.side button{display:flex;align-items:center;gap:10px;border:0;background:transparent;color:inherit;text-align:left;padding:9px 10px;border-radius:7px;font-weight:500}
+.side button svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.side button:hover{background:rgba(255,255,255,.07);color:#fff}
+.side button[aria-current=page]{background:#1F5FD1;color:#fff}
+.side .grow{flex:1}
+.app{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+.view{flex:1;min-height:0;overflow:auto}
+.jobview{display:flex;flex-direction:column;overflow:hidden}
+.hub{padding:20px max(16px,env(safe-area-inset-right,0px)) 32px max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:16px;max-width:1280px}
+.hubhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hubhead h1{margin:0;font-family:var(--f-head);font-weight:700;font-size:28px;letter-spacing:.01em;margin-right:auto}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+.card h2{margin:0 0 10px;font-family:var(--f-head);font-weight:600;font-size:18px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.kpi .lbl{font-size:13px;color:var(--muted);font-weight:500}
+.kpi .val{font-family:var(--f-head);font-weight:700;font-size:30px;line-height:1.15}
+.kpi .sub{font-size:13px;color:var(--muted)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.list{display:flex;flex-direction:column}
+.list a,.list .li{display:flex;gap:10px;align-items:center;padding:9px 2px;border-bottom:1px solid var(--line);color:inherit;text-decoration:none;cursor:pointer}
+.list a:last-child,.list .li:last-child{border-bottom:0}
+.list .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st{display:inline-flex;align-items:center;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap;color:var(--stc);background:color-mix(in srgb, var(--stc) 15%, transparent)}
+select.st{border:0;appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:9px}
+.stages{display:flex;gap:8px;flex-wrap:wrap}
+.stages button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 12px;text-align:left;display:flex;flex-direction:column;gap:1px;min-width:118px}
+.stages button[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.stages b{font-size:13px;color:var(--muted);font-weight:600}
+.stages span{font-family:var(--f-num);font-size:14px}
+.jt{width:100%;min-width:760px}
+.jt tbody tr{cursor:pointer}
+.jt tbody tr:hover td{background:var(--accent-soft)}
+.jt td{padding:9px 6px}
+.jt .nm{font-weight:600}
+.jt .sub{font-size:13px;color:var(--muted)}
+.search{min-width:200px}
+/* schedule (gantt) */
+.gwrap{overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel);max-height:calc(100vh - 230px)}
+.gantt{display:grid;font-size:12px;position:relative;--lw:220px}
+.gantt .gl{position:sticky;left:0;z-index:2;background:var(--panel);border-right:1px solid var(--line);padding:6px 10px;display:flex;flex-direction:column;justify-content:center;min-width:0;border-bottom:1px solid var(--line);cursor:pointer}
+.gantt .gl b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gantt .gl span{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gantt .gh{position:sticky;top:0;z-index:1;background:var(--panel);border-bottom:1px solid var(--line);text-align:center;padding:3px 0;color:var(--muted)}
+.gantt .gh.wk{font-weight:600;color:var(--ink);text-align:left;padding-left:4px;border-left:1px solid var(--line)}
+.gantt .corner{position:sticky;left:0;top:0;z-index:3;background:var(--panel);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.gantt .gd{border-bottom:1px solid var(--line);border-left:1px solid color-mix(in srgb, var(--line) 50%, transparent);min-height:44px}
+.gantt .gd.we{background:color-mix(in srgb, var(--line) 35%, transparent)}
+.gantt .gd.today{background:color-mix(in srgb, var(--accent) 12%, transparent)}
+.gbar{position:relative;z-index:1;align-self:center;height:26px;border-radius:5px;color:#fff;font-weight:600;font-size:12px;display:flex;align-items:center;padding:0 6px;overflow:hidden;white-space:nowrap;cursor:grab;box-shadow:0 1px 2px rgba(0,0,0,.2);touch-action:none;margin:0 1px}
+.gbar.drag{cursor:grabbing;opacity:.85}
+.gload{text-align:center;font-family:var(--f-num);padding:6px 0;border-left:1px solid color-mix(in srgb, var(--line) 50%, transparent);border-bottom:1px solid var(--line)}
+.gload.over{background:color-mix(in srgb, var(--danger) 18%, transparent);color:var(--danger);font-weight:600}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.tasks td input[type=text]{width:100%;min-width:90px}
+.tasks td input[type=number]{width:58px}
+.field{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--muted)}
+.field input,.field select{color:var(--ink)}
+.fields{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.crumb{display:flex;align-items:center;gap:6px;font-weight:600}
+.crumb button{border:0;background:none;color:var(--accent);padding:4px 2px;font-weight:600}
+@media (max-width:820px){
+  body{overflow:hidden;height:100%}
+  .shell{flex-direction:column-reverse}
+  .side{width:auto;flex-direction:row;padding:4px max(6px,env(safe-area-inset-left,0px)) calc(4px + env(safe-area-inset-bottom,0px));gap:0;justify-content:space-around}
+  .side .brand,.side .grow{display:none}
+  .side button{flex-direction:column;gap:2px;font-size:11px;padding:6px 4px;flex:1;align-items:center}
+  .jobview{overflow:auto}
+  .gantt{--lw:128px}
+  .jobview main{flex-direction:column;flex:none;min-height:auto}
+  .jobview>*{flex:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="shell">
+<nav class="side" aria-label="Main">
+  <div class="brand"><i></i>Con Est</div>
+  <button data-view="dash"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Dashboard</button>
+  <button data-view="jobs"><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4z"/><path d="M9 7V5h6v2"/><path d="M4 12h16"/></svg>Jobs</button>
+  <button data-view="job"><svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M6 16l9-9 3 3-9 9H6z"/><path d="M13 9l3 3"/></svg>Estimate</button>
+  <button data-view="sched"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M7 14h4M13 17h4"/></svg>Schedule</button>
+  <div class="grow"></div>
+  <button id="navSettings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.4-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.2-.8.2-1.2z"/></svg>Settings</button>
+</nav>
+<div class="app">
+<section class="view" id="vDash" hidden></section>
+<section class="view" id="vJobs" hidden></section>
+<section class="view" id="vSched" hidden></section>
+<section class="view jobview" id="vJob">
+<header>
+  <div class="job">
+    <div class="crumb"><button id="toJobs">Jobs</button>›</div>
+    <select id="jobSel" aria-label="Job"></select>
+    <select id="jobStatus" class="st" aria-label="Job status"></select>
+    <button class="btn" id="newJob">New job</button>
+    <button class="btn" id="loadPdf">Load PDF</button>
+    <button class="btn" id="jobMenu">Job…</button>
+    <input type="file" id="pdfFile" accept="application/pdf,.pdf" hidden>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="tools" role="group" aria-label="Tools" id="tools">
+    <button data-tool="pan" title="Move around the plan (P)">Pan</button>
+    <button data-tool="scale" title="Calibrate from the scale bar (S)">Scale</button>
+    <button data-tool="room" title="Trace a room: walls and ceiling in one go (R)">Room</button>
+    <button data-tool="area" title="Measure an area in m² (A)">Area</button>
+    <button data-tool="wall" title="Trace walls: length × height (W)">Walls</button>
+    <button data-tool="line" title="Measure a length in lm (L)">Length</button>
+    <button data-tool="count" title="Count items (C)">Count</button>
+  </div>
+  <div class="sep"></div>
+  <div class="opts" id="toolOpts"></div>
+  <div class="sep"></div>
+  <div class="opts">
+    <button class="btn sm" id="zoomOut" aria-label="Zoom out">−</button>
+    <span class="num" id="zoomLbl">100%</span>
+    <button class="btn sm" id="zoomIn" aria-label="Zoom in">+</button>
+    <button class="btn sm" id="zoomFit">Fit</button>
+  </div>
+  <div class="opts" id="scaleInfo"></div>
+</div>
+
+<main>
+  <section class="viewer" id="viewer" data-tool="pan">
+    <div class="scroller" id="scroller">
+      <div class="stage" id="stage"><canvas id="cv"></canvas><svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg></div>
+    </div>
+    <div class="banner" id="banner" hidden></div>
+    <div class="empty" id="empty" hidden><div><p style="font-size:18px;color:var(--ink);margin:0 0 6px">No plan loaded for this job</p><p style="margin:0 0 12px">Load the PDF plans, then set the scale from the drawn scale bar.</p><button class="btn primary" id="emptyLoad">Load PDF</button></div></div>
+    <div class="hud">
+      <div class="readout num" id="readout" hidden></div>
+      <div class="drawbar" id="drawbar" hidden>
+        <button class="btn sm primary" id="dFinish">Finish</button>
+        <button class="btn sm" id="dUndo">Undo point</button>
+        <button class="btn sm" id="dCancel">Cancel</button>
+      </div>
+    </div>
+    <div class="pager" id="pager" hidden>
+      <button class="btn sm" id="pgPrev" aria-label="Previous page">‹</button>
+      <span class="num" id="pgLbl"></span>
+      <button class="btn sm" id="pgNext" aria-label="Next page">›</button>
+    </div>
+  </section>
+  <aside>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="takeoff" aria-selected="true">Takeoff</button>
+      <button role="tab" data-tab="rates" aria-selected="false">Rates</button>
+      <button role="tab" data-tab="quote" aria-selected="false">Quote</button>
+      <button role="tab" data-tab="schedule" aria-selected="false">Schedule</button>
+    </div>
+    <div class="pane" id="pane"></div>
+  </aside>
+</main>
+</section>
+</div>
+</div>
+<div id="modalHost"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script>
+"use strict";
+const SAMPLE_PDF = "__SAMPLE_PDF__";
+const PT_M = 0.0254 / 72; // one PDF point in metres at printed size
+const COLORS = ["#1F5FD1","#D9480F","#2B8A3E","#9C36B5","#C2255C","#0B7285","#E67700","#5C7CFA","#5F3DC4","#087F5B"];
+const UNIT = {m2:"m²", lm:"lm", each:"ea", hr:"hr"};
+const TOOL_UNIT = {area:"m2", wall:"m2", line:"lm", count:"each"};
+// quoteAs: "add" = in the quote total, "option" = priced separately as an option, "none" = measured but not priced
+const DEFAULT_ITEMS = [
+  {id:"floor", name:"Whole property (floor area)", unit:"m2", rate:60, quoteAs:"add"},
+  {id:"posts", name:"Posts & downpipes", unit:"each", rate:40, quoteAs:"add"},
+  {id:"doors", name:"Doors", unit:"each", rate:0, quoteAs:"option"},
+  {id:"windows", name:"Windows (timber)", unit:"each", rate:0, quoteAs:"option"},
+  {id:"trim", name:"Skirting & architraves", unit:"lm", rate:0, quoteAs:"option"},
+  {id:"walls", name:"Walls (internal)", unit:"m2", rate:60, quoteAs:"none"},
+  {id:"ceil", name:"Ceilings", unit:"m2", rate:60, quoteAs:"none"},
+  {id:"ext", name:"External cladding & render (painted)", unit:"m2", rate:60, quoteAs:"option"},
+  {id:"eaves", name:"Eaves", unit:"lm", rate:35, quoteAs:"add"},
+].map((it,i)=>({...it, color:COLORS[i%COLORS.length]}));
+const QUOTE_AS = {add:"In total", option:"Option", none:"Not priced"};
+
+/* ---------- storage (best effort) ---------- */
+const LS_KEY = "conest.v1", LS_RATES = "conest.rates";
+function lsGet(k){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+let idbP = null;
+function idb(){
+  if(!idbP) idbP = new Promise((res)=>{ try{ const r = indexedDB.open("conest",1);
+    r.onupgradeneeded = ()=>r.result.createObjectStore("pdfs");
+    r.onsuccess = ()=>res(r.result); r.onerror = ()=>res(null); }catch(e){ res(null); } });
+  return idbP;
+}
+async function pdfPut(id, buf){ const db = await idb(); if(!db) return; try{ db.transaction("pdfs","readwrite").objectStore("pdfs").put(buf,id); }catch(e){} }
+async function pdfGet(id){ const db = await idb(); if(!db) return null; return new Promise(res=>{ try{ const r = db.transaction("pdfs").objectStore("pdfs").get(id); r.onsuccess=()=>res(r.result||null); r.onerror=()=>res(null);}catch(e){res(null);} }); }
+async function pdfDel(id){ const db = await idb(); if(!db) return; try{ db.transaction("pdfs","readwrite").objectStore("pdfs").delete(id); }catch(e){} }
+
+/* ---------- maths ---------- */
+const r2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
+function polyArea(p){ let a=0; for(let i=0;i<p.length;i++){ const [x1,y1]=p[i],[x2,y2]=p[(i+1)%p.length]; a += x1*y2 - x2*y1; } return Math.abs(a)/2; }
+function pathLen(p, closed){ let l=0; for(let i=1;i<p.length;i++) l += Math.hypot(p[i][0]-p[i-1][0], p[i][1]-p[i-1][1]);
+  if(closed && p.length>2) l += Math.hypot(p[0][0]-p[p.length-1][0], p[0][1]-p[p.length-1][1]); return l; }
+function centroid(p){ let x=0,y=0; p.forEach(q=>{x+=q[0];y+=q[1];}); return [x/p.length, y/p.length]; }
+const money = n => n.toLocaleString("en-AU",{style:"currency",currency:"AUD"});
+const fmt = (n,d=2) => n.toLocaleString("en-AU",{minimumFractionDigits:d,maximumFractionDigits:d});
+const esc = s => String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid = () => Math.random().toString(36).slice(2,10);
+
+// Quantity a measurement contributes, in its item's unit. null = page not scaled yet.
+function measQty(m){
+  const k = job.scales[m.page]; if(!k && m.type!=="count") return null;
+  if(m.type==="area") return polyArea(m.pts) * k * k;
+  if(m.type==="line") return pathLen(m.pts,false) * k;
+  if(m.type==="wall") return Math.max(0, pathLen(m.pts, m.closed) * k * (+m.height||0) - (+m.deduct||0));
+  if(m.type==="count") return m.pts.length;
+  return 0;
+}
+// Total quantity for a rate item: traced measurements plus ticked areas read from the plan's schedule.
+function itemQty(it){
+  let q = 0, n = 0;
+  job.meas.forEach(m=>{ if(m.itemId===it.id){ const v = measQty(m); if(v!=null){ q+=v; n++; } } });
+  (job.areas||[]).forEach(a=>{ if(a.itemId===it.id && a.include){ q += +a.m2||0; n++; } });
+  return {q, n};
+}
+function quoteLines(){
+  const lines = [], options = [];
+  job.items.forEach(it=>{
+    const as = it.quoteAs || "add"; if(as==="none") return;
+    const {q, n} = itemQty(it);
+    if(n){ const qty = r2(q); (as==="option" ? options : lines).push({desc:it.name, qty, unit:UNIT[it.unit], rate:+it.rate||0, amount:r2(qty*(+it.rate||0)), itemId:it.id}); }
+  });
+  job.extras.forEach(x=>{ const qty = r2(+x.qty||0); if(x.desc || qty) lines.push({desc:x.desc||"Extra", qty, unit:x.unit||"", rate:+x.rate||0, amount:r2(qty*(+x.rate||0)), extra:true}); });
+  const ex = r2(lines.reduce((s,l)=>s+l.amount,0));
+  const gst = r2(ex * (+job.gst||0)/100);
+  options.forEach(o=>{ o.gst = r2(o.amount*(+job.gst||0)/100); o.inc = r2(o.amount+o.gst); });
+  return {lines, options, ex, gst, inc: r2(ex+gst)};
+}
+
+/* ---------- state ---------- */
+let S = lsGet(LS_KEY) || {jobs:[], currentId:null};
+let job = null, pdfDoc = null, pageNum = 1, pageW = 0, pageH = 0, zoom = 1;
+let tool = "pan", draft = null, hover = null, selId = null, tab = "takeoff", shiftDown = false;
+let renderTask = null, renderTimer = null;
+const lastItem = {area:"floor", wall:"ext", line:"eaves", count:"doors", roomWall:"walls", roomCeil:"ceil"};
+const $ = id => document.getElementById(id);
+
+function defaultItems(){ const saved = lsGet(LS_RATES);
+  return JSON.parse(JSON.stringify(saved || DEFAULT_ITEMS)).map(it=>({...it, quoteAs: it.quoteAs || (DEFAULT_ITEMS.find(d=>d.id===it.id)||{}).quoteAs || "add"})); }
+function newJob(name){ return {id:uid(), itemsVer:2, name, pdfName:"", scales:{}, meas:[], areas:[], items:defaultItems(), extras:[], gst:10, wallHeight:2.4, seq:0, created:Date.now()}; }
+function save(){ lsSet(LS_KEY, S); }
+
+const SAMPLE_VER = 2;
+function sampleJob(){
+  const j = newJob("Sample house (example)");
+  j.id = "sample"; j.sample = true; j.sampleVer = SAMPLE_VER; j.pdfName = "sample-floor-plan.pdf"; j.items = JSON.parse(JSON.stringify(DEFAULT_ITEMS));
+  return j; // the auto takeoff fills it in when the plan opens
+}
+S.jobs = S.jobs.map(j=>j.sample && j.sampleVer!==SAMPLE_VER ? sampleJob() : j);
+S.jobs.forEach(j=>{ j.areas = j.areas||[];
+  if((j.itemsVer||1) < 2){ j.items.forEach(it=>{
+    if(it.id==="eaves" && it.unit==="m2"){ Object.assign(it, {name:"Eaves", unit:"lm", rate:35, quoteAs:"add"}); }
+    if(it.id==="ext" && it.quoteAs==="none"){ Object.assign(it, {name:"External cladding & render (painted)", quoteAs:"add"}); } });
+    j.meas = j.meas.filter(m=>!(m.itemId==="eaves" && m.type!=="line")); j.itemsVer = 2; } });
+if(!S.jobs.length){ S.jobs.push(sampleJob()); S.currentId = "sample"; }
+
+/* ---------- PDF ---------- */
+function b64ToBuf(b){ const s = atob(b), u = new Uint8Array(s.length); for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u.buffer; }
+async function openPdf(buf){
+  if(!window.pdfjsLib){ toast("The PDF reader didn't load. Check your internet connection and reload."); return; }
+  pdfDoc = await pdfjsLib.getDocument({data:new Uint8Array(buf.slice(0))}).promise;
+  pageNum = Math.min(job.page||1, pdfDoc.numPages);
+  await showPage(true);
+  if(!job.autoDone) await runAuto(true);
+}
+
+/* ---------- auto takeoff: reads the plan's own text ---------- */
+const STD_SCALES = [5,10,20,25,50,75,100,125,150,200,250,500,1000,1250,2000,2500];
+const ISO_LONG = {0:1189, 1:841, 2:594, 3:420, 4:297}; // A-series long side, mm
+const NUM = String.raw`(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?`;
+const AREA_RE = new RegExp(NUM + String.raw`\s*(?:m2|m²|m\^2|sq\.?\s?m|sqm)(?![a-z])`, "gi");
+const SCHED_NAMES = /living|house|dwelling|residence|home|ground|first|upper|lower|level|floor area|habitable|garage|carport|alfresco|porch|portico|verandah|veranda|deck|patio|balcony|store|shed|studio|pool ?house|outbuilding|granny|unit|total/i;
+const COUNT_TAGS = [
+  {key:"downpipes", name:"Downpipes", itemId:"posts", re:/^(E?DP\d{0,2}|RWDP)\.?$/i},
+  {key:"rainheads", name:"Rainheads (RH, each with a downpipe)", itemId:"posts", re:/^RH\d{0,2}\.?$/},
+  {key:"posts", name:"Posts", itemId:"posts", re:/^(POSTS?|PST)$/i},
+  {key:"doors", name:"Doors (D tags)", itemId:"doors", re:/^D\d{1,2}[A-Z]?$/},
+  {key:"windows", name:"Windows (W tags)", itemId:"windows", re:/^W\d{1,2}[A-Z]?$/},
+  {key:"doorw", name:"Doors (leaf widths 720/820/870…)", itemId:"doors", re:/^(6[2-9]|7[2-7]|8[2-7]|9[2-7])0(\s?CSD)?$/i},
+  {key:"sldoor", name:"Sliding robe/linen doors", itemId:"doors", re:/^SL\.?\s?DOORS?$/i},
+];
+const parseNum = (a,b)=>parseFloat(a.replace(/,/g,"") + (b ? "."+b : ""));
+function areaKind(label){
+  if(/total|overall|gross/i.test(label)) return "total";
+  if(/site|\blot\b|\bland\b|land area|allotment|coverage|permeab|garden|landscap|driveway|paving|open space|\bpos\b/i.test(label)) return "site";
+  return SCHED_NAMES.test(label) ? "schedule" : "room";
+}
+// Group a page's text into lines, then into segments split at wide gaps (so separate tables don't merge).
+function textSegments(items){
+  items.sort((a,b)=>(a.y+a.h/2)-(b.y+b.h/2) || a.x-b.x);
+  const lines = [];
+  items.forEach(it=>{ const yc = it.y+it.h/2, L = lines[lines.length-1];
+    if(L && Math.abs(L.yc-yc) < Math.max(2, it.h*0.45)) L.items.push(it); else lines.push({yc, items:[it]}); });
+  const segs = [];
+  lines.forEach(L=>{ L.items.sort((a,b)=>a.x-b.x); let cur = null;
+    L.items.forEach(it=>{ const gap = cur ? it.x - (cur.x+cur.w) : 0;
+      if(cur && gap < 120){ cur.text += (gap > it.h*0.15 ? " " : "") + it.s; cur.w = Math.max(cur.w, it.x+it.w-cur.x); cur.h = Math.max(cur.h, it.h); cur.y = Math.min(cur.y, it.y); }
+      else { if(cur) segs.push(cur); cur = {text:it.s, x:it.x, y:it.y, w:it.w, h:it.h, line:lines.indexOf(L)}; } });
+    if(cur) segs.push(cur); });
+  return segs;
+}
+/* ---------- eaves from the drawing: dashed roof line sitting just outside a wall ---------- */
+async function pageSegments(doc, pg){
+  const page = await doc.getPage(pg), vp = page.getViewport({scale:1}), ol = await page.getOperatorList();
+  const O = pdfjsLib.OPS, U = pdfjsLib.Util, segs = [];
+  let ctm = [1,0,0,1,0,0], lw = 1; const stack = []; let pending = [];
+  const STROKE = new Set([O.stroke, O.closeStroke, O.fillStroke, O.eoFillStroke, O.closeFillStroke, O.closeEOFillStroke]);
+  const DROP = new Set([O.fill, O.eoFill, O.endPath]);
+  for(let i=0;i<ol.fnArray.length;i++){
+    const fn = ol.fnArray[i], a = ol.argsArray[i];
+    if(fn===O.save) stack.push([ctm, lw]);
+    else if(fn===O.restore){ const s = stack.pop(); if(s){ [ctm, lw] = s; } }
+    else if(fn===O.transform) ctm = U.transform(ctm, a);
+    else if(fn===O.setLineWidth) lw = a[0];
+    else if(fn===O.constructPath){
+      const [ops, co] = a; let k = 0, cur = null, start = null;
+      const T = (x,y)=>U.applyTransform(U.applyTransform([x,y], ctm), vp.transform);
+      const w = lw * Math.sqrt(Math.abs(ctm[0]*ctm[3]-ctm[1]*ctm[2])) || 0.3;
+      for(const op of ops){
+        if(op===O.moveTo){ cur = T(co[k],co[k+1]); start = cur; k+=2; }
+        else if(op===O.lineTo){ const p = T(co[k],co[k+1]); k+=2; if(cur) pending.push([cur,p,w]); cur = p; }
+        else if(op===O.curveTo){ cur = T(co[k+4],co[k+5]); k+=6; }
+        else if(op===O.curveTo2 || op===O.curveTo3){ cur = T(co[k+2],co[k+3]); k+=4; }
+        else if(op===O.closePath){ if(cur && start) pending.push([cur,start,w]); cur = start; }
+        else if(op===O.rectangle){ const [x,y,rw,rh] = co.slice(k,k+4); k+=4; const p = [T(x,y),T(x+rw,y),T(x+rw,y+rh),T(x,y+rh)]; for(let j=0;j<4;j++) pending.push([p[j],p[(j+1)%4],w]); }
+      }
+    }
+    else if(STROKE.has(fn)){ segs.push(...pending); pending = []; }
+    else if(DROP.has(fn)) pending = [];
+  }
+  return segs;
+}
+// check a page's scale against its written dimensions: a "3600" should sit on a line 3.6 m long.
+// Returns how many agree, and the most common other ratio (e.g. 2 when the sheet size is wrong)
+function dimCheck(items, segs, k){
+  const rs = [];
+  items.forEach(t=>{ const s = t.s.trim(); if(!/^\d{3,5}$/.test(s)) return; const v = +s; if(v<300 || v>40000) return;
+    const vert = t.h > t.w*1.5, len = Math.max(t.w,t.h), th = Math.min(t.w,t.h), cx = t.x+t.w/2, cy = t.y+t.h/2;
+    let L = 0;   // the shortest line under the number that spans it is the dimension line
+    for(const [a,b] of segs){ const dx = Math.abs(b[0]-a[0]), dy = Math.abs(b[1]-a[1]);
+      if(!vert && dy<0.3 && dx>len*0.8 && Math.abs(a[1]-cy)<th*1.3 && Math.min(a[0],b[0])<cx && Math.max(a[0],b[0])>cx && (!L || dx<L)) L = dx;
+      if(vert && dx<0.3 && dy>len*0.8 && Math.abs(a[0]-cx)<th*1.3 && Math.min(a[1],b[1])<cy && Math.max(a[1],b[1])>cy && (!L || dy<L)) L = dy; }
+    if(L) rs.push(v/1000/(L*k)); });
+  const near = r=>rs.filter(x=>Math.abs(x/r-1)<0.015).length;
+  const alt = [0.25,0.354,0.4,0.5,0.667,0.707,0.75,0.8,1.25,1.333,1.414,1.5,2,2.5,2.83,4].map(r=>({r, n:near(r)})).sort((a,b)=>b.n-a.n)[0];
+  return {ok:near(1), n:rs.length, alt: alt.n ? alt : null};
+}
+function findEaves(segs, k){
+  // axis-aligned pieces, keyed by orientation and position
+  const ax = [];
+  segs.forEach(([p,q,w])=>{ const dx = q[0]-p[0], dy = q[1]-p[1];
+    if(Math.abs(dy) < 0.2 && Math.abs(dx) > 0.2) ax.push({o:"H", c:(p[1]+q[1])/2, a:Math.min(p[0],q[0]), b:Math.max(p[0],q[0]), w});
+    else if(Math.abs(dx) < 0.2 && Math.abs(dy) > 0.2) ax.push({o:"V", c:(p[0]+q[0])/2, a:Math.min(p[1],q[1]), b:Math.max(p[1],q[1]), w}); });
+  // walls = the heaviest line weight used a fair amount
+  const byW = {}; ax.forEach(s=>{ const key = s.w.toFixed(2); byW[key] = (byW[key]||0) + (s.b-s.a); });
+  const heavy = Object.entries(byW).filter(([,L])=>L*k > 20).map(([w])=>+w).sort((x,y)=>y-x)[0];
+  if(!heavy) return [];
+  const merge = (list, gap, minPieces)=>{
+    const g = {}; list.forEach(s=>{ const key = s.o + Math.round(s.c*2)/2; (g[key] ||= []).push(s); });
+    const out = [];
+    Object.values(g).forEach(arr=>{ arr.sort((x,y)=>x.a-y.a); let cur = null;
+      arr.forEach(s=>{ if(cur && s.a - cur.b <= gap){ cur.b = Math.max(cur.b, s.b); cur.n++; } else { if(cur) out.push(cur); cur = {o:s.o, c:s.c, a:s.a, b:s.b, n:1}; } });
+      if(cur) out.push(cur); });
+    return out.filter(s=>s.n >= minPieces);
+  };
+  const walls = merge(ax.filter(s=>s.w >= heavy*0.8), 0.1/k, 1).filter(s=>(s.b-s.a)*k >= 0.5);
+  const dashes = merge(ax.filter(s=>s.w < heavy*0.6 && (s.b-s.a)*k < 0.6), 0.3/k, 4).filter(s=>(s.b-s.a)*k >= 1);
+  const found = [];
+  dashes.forEach(d=>{
+    let pair = null;
+    walls.forEach(w=>{ if(w.o!==d.o) return; const off = Math.abs(w.c-d.c)*k;
+      if(off>=0.3 && off<=1.2 && (Math.min(d.b,w.b)-Math.max(d.a,w.a))*k > 0.3 && (!pair || off<pair.off)) pair = {off, side: w.c>d.c ? 1 : -1}; });
+    if(!pair) return;
+    const out = -pair.side;
+    let ov = 0, solid = false;
+    walls.forEach(w=>{ if(w.o===d.o && Math.abs(Math.abs(w.c-d.c)*k - pair.off) < 0.15 && Math.min(d.b,w.b) > Math.max(d.a,w.a)){
+      ov += Math.min(d.b,w.b)-Math.max(d.a,w.a);
+      // a real wall is long, or is a nib joined to a long cross wall (garage door openings); posts and piers are neither
+      if((w.b-w.a)*k >= 1.5 || walls.some(x=>x.o!==w.o && (x.b-x.a)*k >= 1.5 && (Math.abs(x.c-w.a)*k < 0.3 || Math.abs(x.c-w.b)*k < 0.3) && x.a-0.3/k <= w.c && w.c <= x.b+0.3/k)) solid = true; } });
+    if(!solid || (ov*k < 1 && ov < 0.2*(d.b-d.a))) return;
+    // keep the stretches where nothing of the building lies further out: that's the roof edge
+    const step = 0.25/k, runs = []; let run = null;
+    for(let t=d.a+step/2; t<d.b; t+=step){
+      const blocked = walls.some(w=>w.o===d.o && w.a<=t && t<=w.b && (w.c-d.c)*out > 0.5);
+      if(!blocked){ if(run && t-run[1] <= step*1.5) run[1] = t; else { run = [t,t]; runs.push(run); } }
+    }
+    runs.forEach(([a,b])=>{ a = Math.max(d.a, a-step/2); b = Math.min(d.b, b+step/2); if((b-a)*k < 2) return;
+      found.push({pts: d.o==="H" ? [[a,d.c],[b,d.c]] : [[d.c,a],[d.c,b]], width:r2(pair.off)}); });
+  });
+  return found;
+}
+
+async function runAuto(first){
+  if(!pdfDoc) return;
+  job.areas = (job.areas||[]).filter(a=>!a.auto);  // allowances are auto too
+  job.meas = job.meas.filter(m=>!m.auto);
+  const rep = {pages:pdfDoc.numPages, textPages:0, scale:[], counts:{}, when:Date.now()};
+  const areas = [], seen = new Set(), counts = {}, pageText = {};
+  for(let pg=1; pg<=pdfDoc.numPages; pg++){
+    const page = await pdfDoc.getPage(pg), vp = page.getViewport({scale:1});
+    let tc; try{ tc = await page.getTextContent(); }catch(e){ continue; }
+    const items = tc.items.filter(i=>i.str && i.str.trim()).map(i=>{
+      const [a,b,c,d,e,f] = i.transform, h = Math.hypot(c,d) || Math.hypot(a,b) || 8;
+      const p1 = vp.convertToViewportPoint(e,f), p2 = vp.convertToViewportPoint(e+(i.width||0), f+h);
+      return {s:i.str, x:Math.min(p1[0],p2[0]), y:Math.min(p1[1],p2[1]), w:Math.abs(p2[0]-p1[0]), h:Math.abs(p2[1]-p1[1])};
+    });
+    if(!items.length) continue;
+    rep.textPages++;
+    const segs = textSegments(items);
+    pageText[pg] = segs.map(s=>s.text).join("\n");
+    // scale, e.g. "SCALE 1:100 @ A1"
+    if(!job.scales[pg]){
+      const tally = {};
+      segs.forEach(s=>{ for(const m of s.text.matchAll(/\b1\s*:\s*(\d{1,5})(?:\s*(?:@|at)?\s*\(?\s*A\s*([0-4])(?![0-9]))?/gi)){
+        // text runs can glue the next character on ("1 : 1001"), so snap to a standard scale
+        let d = m[1], r = null; while(d.length && r===null){ if(STD_SCALES.includes(+d)) r = +d; else d = d.slice(0,-1); }
+        if(!r) continue; const k = r+"|"+(m[2]??""); tally[k] = (tally[k]||0) + 1 + (m[2]?1:0); } });
+      const best = Object.entries(tally).sort((a,b)=>b[1]-a[1])[0];
+      if(best){
+        const [r, sheet] = best[0].split("|"), longMm = Math.max(vp.width, vp.height)/72*25.4;
+        let factor = 1, note = "";
+        if(sheet!==""){ factor = ISO_LONG[sheet]/longMm; note = ` @ A${sheet}`; }
+        else { const near = Object.entries(ISO_LONG).find(([,v])=>Math.abs(v-longMm)/v < 0.02); note = near ? ` (sheet is A${near[0]})` : " (sheet size not standard, check it)"; }
+        job.scales[pg] = PT_M * (+r) * factor;
+        job.scaleAuto = job.scaleAuto || {}; job.scaleAuto[pg] = `1:${r}${note}`;
+        rep.scale.push(`p${pg} 1:${r}${note}`);
+      }
+    }
+    if(job.scales[pg] && job.scaleAuto && job.scaleAuto[pg]){
+      try{ const c = dimCheck(items, await pageSegments(pdfDoc, pg), job.scales[pg]);
+        // every dimension out by the same factor and none agreeing: the written scale or sheet size is wrong, so fix it
+        if(c.ok===0 && c.alt && c.alt.n>=4){ job.scales[pg] *= c.alt.r; c.fixed = Math.round(job.scales[pg]/PT_M); job.scaleAuto[pg] = `1:${c.fixed}, corrected from written dimensions`; }
+        (rep.dimCheck ||= {})[pg] = c; }catch(e){}
+    }
+    else if(!job.scales[pg]){
+      // no scale written: work it out from the dimensions, trying each standard scale
+      try{ const sg = await pageSegments(pdfDoc, pg);
+        const best = STD_SCALES.map(r=>({r, c:dimCheck(items, sg, PT_M*r)})).sort((a,b)=>b.c.ok-a.c.ok)[0];
+        if(best && best.c.ok>=4){ job.scales[pg] = PT_M*best.r; (job.scaleAuto ||= {})[pg] = `1:${best.r}, from written dimensions`;
+          rep.scale.push(`p${pg} 1:${best.r} (from ${best.c.ok} written dimensions)`); (rep.dimCheck ||= {})[pg] = best.c; } }catch(e){}
+    }
+    // areas written on the plan, e.g. "GARAGE 36.00 m²", including schedules where the label sits in its own column
+    const push = (label, val, s)=>{
+      label = label.replace(/[\s:=\-–.()]+$/,"").replace(/^[\s:=\-–.]+/,"").trim() || "Area";
+      if(!(val>0.5 && val<20000)) return;
+      const key = label.toLowerCase()+"|"+val; if(seen.has(key)) return; seen.add(key);
+      areas.push({id:uid(), auto:true, label, m2:val, kind:areaKind(label), page:pg, box:[s.x, s.y, s.w, s.h], itemId:"floor"});
+    };
+    segs.forEach((s,i)=>{
+      for(const m of s.text.matchAll(AREA_RE)){
+        let label = s.text.slice(0, m.index).replace(AREA_RE,"").trim();
+        if(!/[a-z]/i.test(label)){ const prev = segs[i-1]; label = prev && prev.line===s.line ? prev.text : label; }
+        push(label, parseNum(m[1], m[2]), s);
+      }
+    });
+    // schedule tables whose heading carries the unit ("AREA (m²)") and rows are "LABEL  123.45"
+    segs.forEach((h,i)=>{
+      if(!/area|schedule/i.test(h.text) || !/m2|m²|sq/i.test(segs.filter(s=>Math.abs(s.line-h.line)<=1).map(s=>s.text).join(" "))) return;
+      segs.filter(s=>s.line>h.line && s.line<=h.line+15 && s.x > h.x-150 && s.x < h.x+400).forEach(s=>{
+        const row = segs.filter(o=>o.line===s.line).map(o=>o.text).join(" ");
+        const m = row.match(new RegExp("^([A-Za-z][A-Za-z0-9 &/().'-]{1,40}?)\\s+" + NUM + "\\s*$"));
+        if(m && s===segs.find(o=>o.line===s.line)) push(m[1], parseNum(m[2], m[3]), s);
+      });
+    });
+    // tags such as DP, POST, D1, W3
+    items.forEach(it=>{ const tok = it.s.trim(); COUNT_TAGS.forEach(t=>{ if(t.re.test(tok)){
+      ((counts[t.key] ||= {})[pg] ||= []).push([it.x+it.w/2, it.y+it.h/2]); } }); });
+  }
+  // decide which areas to include: schedule lines (not totals or site); room areas only if there's no schedule
+  // when the lines on a sheet add up to that sheet's written total, they are the schedule, whatever their names
+  areas.filter(t=>t.kind==="total").forEach(t=>{
+    const parts = areas.filter(a=>a.page===t.page && a.kind!=="total" && a.kind!=="site");
+    if(parts.length && Math.abs(parts.reduce((s,a)=>s+a.m2,0) - t.m2) < 0.05) parts.forEach(a=>a.kind = "schedule");
+  });
+  const hasSched = areas.some(a=>a.kind==="schedule");
+  areas.forEach(a=>{ a.include = (a.kind==="schedule" || (!hasSched && a.kind==="room")) && !/plant|equip|landing|services|\bbin|\bshed\b|workshop/i.test(a.label); });
+  if(!areas.some(a=>a.include)){ const t = areas.find(a=>a.kind==="total"); if(t) t.include = true; }
+  // a second schedule with its own total (e.g. a shed or studio) is a separate building, quoted separately
+  const schedPgs = [...new Set(areas.filter(a=>a.include && a.kind==="schedule").map(a=>a.page))];
+  if(schedPgs.length > 1 && schedPgs.every(p=>areas.some(t=>t.kind==="total" && t.page===p))){
+    const sum = p=>areas.filter(a=>a.include && a.page===p).reduce((s,a)=>s+a.m2,0);
+    const main = schedPgs.sort((a,b)=>sum(b)-sum(a))[0];
+    rep.separate = schedPgs.filter(p=>p!==main).map(p=>{ const xs = areas.filter(a=>a.include && a.page===p); xs.forEach(a=>a.include=false); return {page:p, m2:r2(xs.reduce((s,a)=>s+a.m2,0)), labels:xs.map(a=>a.label)}; });
+  }
+  job.areas.push(...areas);
+  // counts: use the page with the most tags, so the same downpipe on several sheets isn't counted twice
+  // prefer the sheet holding the biggest included schedule area, so a separate shed sheet doesn't win
+  const mainPg = String((areas.filter(a=>a.include).sort((a,b)=>b.m2-a.m2)[0]||{}).page);
+  COUNT_TAGS.forEach(t=>{ const byPg = counts[t.key]; if(!byPg) return;
+    const [pg, pts] = byPg[mainPg] ? [mainPg, byPg[mainPg]] : Object.entries(byPg).sort((a,b)=>b[1].length-a[1].length)[0];
+    if(!job.items.some(i=>i.id===t.itemId)) return;
+    job.meas.push({id:uid(), auto:true, page:+pg, type:"count", itemId:t.itemId, name:`${t.name} (auto)`, pts});
+    rep.counts[t.name] = {n:pts.length, page:+pg, others:Object.entries(byPg).filter(([p])=>p!==pg).map(([p,v])=>`p${p}: ${v.length}`)};
+  });
+  // painted posts called out in notes, e.g. "150x150 GALV. STEEL POST" (not ones hidden inside brick piers)
+  const postRe = /\b(\d{2,3})\s*[x×]\s*(\d{2,3})\s*(?:mm\s*)?(?:galv\.?|galvanised|steel|shs|timber|hardwood|cypress|\s)*\s*posts?\b(?!\s*inside)/gi;
+  let postBest = {n:0}; Object.entries(pageText).forEach(([pg,t])=>{ const m = [...t.matchAll(postRe)].filter(x=>!/inside|within|concealed/i.test(t.slice(x.index, x.index+x[0].length+20))); if(m.length > postBest.n) postBest = {n:m.length, pg:+pg, txt:m[0][0]}; });
+  if(postBest.n && !(rep.counts.Posts) && job.items.some(i=>i.id==="posts")){
+    job.areas.push({id:uid(), auto:true, src:"allow", label:`Posts from notes ("${postBest.txt.trim()}")`, m2:postBest.n, include:true, kind:"allow", itemId:"posts", page:postBest.pg});
+    rep.counts["Posts (notes)"] = {n:postBest.n, page:postBest.pg, others:[]};
+  }
+  // eaves: a "no eaves" note wins; otherwise measure the roof line on the floor plan
+  const allText = Object.values(pageText).join("\n");
+  rep.eaves = null;
+  if(/\b(no|nil|zero|0\s*mm)\s+eaves?\b|\beaves?\s*[:-]?\s*(nil|none|0\s*mm)\b/i.test(allText)) rep.eaves = {none:true};
+  else if(job.items.some(i=>i.id==="eaves")){
+    const planPgs = Object.entries(pageText).filter(([pg,t])=>/floor\s*plan/i.test(t) && !/site\s*plan/i.test(t.split("\n").slice(-30).join(" ")) && job.scales[pg]).map(([pg])=>+pg);
+    const cands = planPgs.length ? planPgs : Object.keys(job.scales).map(Number);
+    let best = null;
+    for(const pg of cands){ try{ const f = findEaves(await pageSegments(pdfDoc, pg), job.scales[pg]); const L = f.reduce((s,e)=>s+pathLen(e.pts)*job.scales[pg],0); if(!best || L > best.L) best = {pg, f, L}; }catch(e){} }
+    if(best && best.f.length){
+      best.f.forEach((e,i)=>job.meas.push({id:uid(), auto:true, page:best.pg, type:"line", itemId:"eaves", name:`Eave ${i+1} (${Math.round(e.width*1000)} wide, auto)`, pts:e.pts}));
+      const widths = best.f.map(e=>e.width).sort((a,b)=>a-b);
+      rep.eaves = {lm:r2(best.L), page:best.pg, n:best.f.length, width:widths[Math.floor(widths.length/2)]};
+    }
+  }
+  // no downpipes drawn: allow 1 per 12 m of eave/gutter (at least 4)
+  if(!rep.counts.Downpipes && !rep.counts["Rainheads (RH, each with a downpipe)"] && job.items.some(i=>i.id==="posts")){
+    const eaveLm = rep.eaves && rep.eaves.lm || 0;
+    const n = Math.max(4, Math.ceil(eaveLm/12));
+    job.areas.push({id:uid(), auto:true, src:"allow", label:`Downpipe allowance (none drawn; 1 per 12 m of eave, min 4)`, m2:n, include:true, kind:"allow", itemId:"posts", page:null});
+  }
+  rep.areas = areas.length;
+  job.autoReport = rep; job.autoDone = true; save();
+  refreshViewer(); renderPane();
+  if(first){
+    if(!rep.textPages) toast("No text in this PDF (looks scanned). Set the scale and trace the outline with Area.");
+    else { tab = "quote"; renderPane(); toast(`Auto takeoff: ${areas.filter(a=>a.include).length} floor area(s), ${Object.values(rep.counts).reduce((s,c)=>s+c.n,0)} tagged item(s)`); }
+  }
+}
+async function loadJobPdf(){
+  pdfDoc = null; draft = null;
+  let buf = job.sample ? b64ToBuf(SAMPLE_PDF) : await pdfGet(job.id);
+  if(buf){ try{ await openPdf(buf); }catch(e){ toast("Couldn't open that PDF."); } }
+  refreshViewer();
+}
+async function showPage(fit){
+  if(!pdfDoc) return;
+  const page = await pdfDoc.getPage(pageNum);
+  const vp = page.getViewport({scale:1});
+  pageW = vp.width; pageH = vp.height;
+  if(fit) zoomFit(); else applyZoom();
+  job.page = pageNum; save();
+  refreshViewer();
+}
+function applyZoom(){
+  const w = pageW*zoom, h = pageH*zoom;
+  const cv = $("cv"), ov = $("ov");
+  cv.style.width = w+"px"; cv.style.height = h+"px";
+  ov.setAttribute("width", w); ov.setAttribute("height", h);
+  ov.setAttribute("viewBox", `0 0 ${pageW} ${pageH}`);
+  $("zoomLbl").textContent = Math.round(zoom*100)+"%";
+  drawOverlay();
+  clearTimeout(renderTimer); renderTimer = setTimeout(renderCanvas, 120);
+}
+async function renderCanvas(){
+  if(!pdfDoc) return;
+  const page = await pdfDoc.getPage(pageNum);
+  let s = zoom * (window.devicePixelRatio||1);
+  const maxPx = 14e6; if(pageW*pageH*s*s > maxPx) s = Math.sqrt(maxPx/(pageW*pageH));
+  const vp = page.getViewport({scale:s});
+  const cv = $("cv"); const tmp = document.createElement("canvas");
+  tmp.width = Math.floor(vp.width); tmp.height = Math.floor(vp.height);
+  if(renderTask){ try{ renderTask.cancel(); }catch(e){} }
+  renderTask = page.render({canvasContext: tmp.getContext("2d"), viewport: vp});
+  try{ await renderTask.promise; }catch(e){ return; }
+  cv.width = tmp.width; cv.height = tmp.height; cv.getContext("2d").drawImage(tmp,0,0);
+}
+function zoomFit(){ const sc = $("scroller"); zoom = Math.max(0.1, Math.min((sc.clientWidth-32)/pageW, (sc.clientHeight-32)/pageH)); applyZoom(); }
+function zoomAt(z, cx, cy){
+  if(!pdfDoc) return;
+  z = Math.max(0.1, Math.min(z, 12));
+  const sc = $("scroller"), r = $("ov").getBoundingClientRect(), sr = sc.getBoundingClientRect();
+  if(cx==null){ cx = sr.left + sc.clientWidth/2; cy = sr.top + sc.clientHeight/2; }
+  const px = (cx - r.left)/zoom, py = (cy - r.top)/zoom;
+  zoom = z; applyZoom();
+  const r2_ = $("ov").getBoundingClientRect();
+  sc.scrollLeft += (r2_.left + px*zoom) - cx;
+  sc.scrollTop += (r2_.top + py*zoom) - cy;
+}
+
+/* ---------- overlay ---------- */
+function itemOf(id){ return job.items.find(i=>i.id===id) || {name:"(deleted item)", unit:"m2", rate:0, color:"#888"}; }
+function svgPts(p){ return p.map(q=>q[0].toFixed(2)+","+q[1].toFixed(2)).join(" "); }
+function qtyLabel(m){ const q = measQty(m); const it = itemOf(m.itemId); return q==null ? "no scale" : (m.type==="count" ? q+" ea" : fmt(q)+" "+UNIT[it.unit]); }
+function drawOverlay(){
+  const ov = $("ov"); if(!job) return;
+  const u = 1/zoom; // one screen pixel in page units
+  let h = "";
+  const fs = 12*u;
+  job.meas.filter(m=>m.page===pageNum).forEach(m=>{
+    const it = itemOf(m.itemId), c = it.color, sel = m.id===selId, sw = sel?4:2;
+    if(m.type==="area"){
+      h += `<polygon points="${svgPts(m.pts)}" fill="${c}" fill-opacity="${sel?.32:.16}" stroke="${c}" stroke-width="${sw}" vector-effect="non-scaling-stroke" data-id="${m.id}"/>`;
+      const [x,y] = centroid(m.pts);
+      h += label(x, y, qtyLabel(m), c, fs);
+    } else if(m.type==="wall" || m.type==="line"){
+      const tag = (m.type==="wall" && m.closed) ? "polygon" : "polyline";
+      h += `<${tag} points="${svgPts(m.pts)}" fill="none" stroke="${c}" stroke-width="${m.type==="wall"?sw+3:sw}" stroke-opacity=".75" ${m.type==="wall"?'stroke-dasharray="10 4"':''} stroke-linejoin="round" vector-effect="non-scaling-stroke" data-id="${m.id}"/>`;
+      const [x,y] = m.type==="wall" ? centroid(m.pts) : m.pts[Math.floor(m.pts.length/2)];
+      h += label(x, y + (m.type==="wall" ? 18*u : -10*u), (m.type==="wall"?"Walls ":"")+qtyLabel(m), c, fs);
+    } else if(m.type==="count"){
+      m.pts.forEach((p,i)=>{ h += `<circle cx="${p[0]}" cy="${p[1]}" r="${(sel?10:8)*u}" fill="${c}" fill-opacity=".85" stroke="#fff" stroke-width="1.5" vector-effect="non-scaling-stroke" data-id="${m.id}"/><text x="${p[0]}" y="${p[1]+3.5*u}" font-size="${10*u}" text-anchor="middle" fill="#fff" font-family="IBM Plex Mono,monospace" pointer-events="none">${i+1}</text>`; });
+    }
+  });
+  (job.areas||[]).filter(a=>a.page===pageNum && a.box).forEach(a=>{ const [x,y,w,hh] = a.box, c = itemOf(a.itemId).color, p = 3*u;
+    h += `<rect x="${x-p}" y="${y-p}" width="${w+2*p}" height="${hh+2*p}" fill="${c}" fill-opacity="${a.include?.18:0}" stroke="${c}" stroke-width="${a.id===selId?3:1.5}" ${a.include?"":'stroke-dasharray="4 3"'} vector-effect="non-scaling-stroke"/>`; });
+  const ref = job.scaleRef && job.scaleRef[pageNum];
+  if(ref && (tool==="scale")){ h += `<polyline points="${svgPts(ref.pts)}" fill="none" stroke="#C2255C" stroke-width="3" vector-effect="non-scaling-stroke"/>`; }
+  if(draft){
+    const pts = draft.pts.slice(); if(hover && draft.type!=="count") pts.push(hover);
+    const c = draft.type==="scale" ? "#C2255C" : itemOf(draft.itemId).color;
+    const closed = ["area","room","wall"].includes(draft.type);
+    if(draft.type==="count") pts.forEach(p=>{ h += `<circle cx="${p[0]}" cy="${p[1]}" r="${8*u}" fill="${c}" stroke="#fff" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`; });
+    else if(pts.length>1) h += `<${closed&&pts.length>2?"polygon":"polyline"} points="${svgPts(pts)}" fill="${closed?c:"none"}" fill-opacity=".12" stroke="${c}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+    draft.pts.forEach((p,i)=>{ if(draft.type!=="count") h += `<circle cx="${p[0]}" cy="${p[1]}" r="${(i===0?6:4)*u}" fill="#fff" stroke="${c}" stroke-width="2" vector-effect="non-scaling-stroke"/>`; });
+  }
+  ov.innerHTML = h;
+  updateReadout();
+}
+function label(x,y,t,c,fs){
+  const w = t.length*fs*0.62 + fs;
+  return `<rect x="${x-w/2}" y="${y-fs*0.95}" width="${w}" height="${fs*1.5}" rx="${fs*0.25}" fill="#fff" fill-opacity=".9" stroke="${c}" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none"/><text x="${x}" y="${y+fs*0.25}" font-size="${fs}" text-anchor="middle" fill="${c}" font-weight="600" font-family="IBM Plex Mono,monospace" pointer-events="none">${esc(t)}</text>`;
+}
+function updateReadout(){
+  const ro = $("readout");
+  if(!draft){ ro.hidden = true; return; }
+  const k = job.scales[pageNum], pts = draft.pts.concat(hover?[hover]:[]);
+  let t = "";
+  if(draft.type==="scale"){ t = pts.length>1 ? `Line on plan: ${fmt(pathLen(pts)/72*25.4,1)} mm at printed size` : "Click one end of the scale bar"; }
+  else if(draft.type==="count"){ t = `Count: ${draft.pts.length}  (click each item, then Finish)`; }
+  else if(!k){ t = "Set the scale for this page first"; }
+  else if(draft.type==="line"){ t = `Length ${fmt(pathLen(pts)*k)} m`; }
+  else { const per = pathLen(pts,true)*k, ar = pts.length>2 ? polyArea(pts)*k*k : 0, hgt = +job.wallHeight||0;
+    t = draft.type==="area" ? `Area ${fmt(ar)} m²` :
+        draft.type==="wall" ? `Perimeter ${fmt(per)} m × ${fmt(hgt)} m = ${fmt(per*hgt)} m²` :
+        `Ceiling ${fmt(ar)} m² · Walls ${fmt(per)} m × ${fmt(hgt)} m = ${fmt(per*hgt)} m²`; }
+  ro.textContent = t; ro.hidden = false;
+}
+
+/* ---------- drawing ---------- */
+function evtPt(e){
+  const r = $("ov").getBoundingClientRect();
+  let p = [(e.clientX - r.left)/zoom, (e.clientY - r.top)/zoom];
+  if(draft && draft.pts.length && (shiftDown || e.shiftKey) && draft.type!=="count"){
+    const l = draft.pts[draft.pts.length-1];
+    p = Math.abs(p[0]-l[0]) > Math.abs(p[1]-l[1]) ? [p[0], l[1]] : [l[0], p[1]];
+  }
+  return p;
+}
+function startDraft(){
+  const itemId = tool==="room" ? null : lastItem[tool];
+  draft = {type:tool, pts:[], itemId};
+  $("drawbar").hidden = false;
+}
+function onPlanClick(e){
+  if(!pdfDoc || tool==="pan" || dragMoved) return;
+  if(e.detail===2 && draft){ finishDraft(); return; }
+  if(!draft) startDraft();
+  const p = evtPt(e);
+  if(["area","room","wall"].includes(draft.type) && draft.pts.length>=3){
+    const f = draft.pts[0];
+    if(Math.hypot(p[0]-f[0], p[1]-f[1])*zoom < 10){ finishDraft(); return; }
+  }
+  draft.pts.push(p);
+  if(draft.type==="scale" && draft.pts.length===2){ askScale(draft.pts); return; }
+  drawOverlay();
+}
+function finishDraft(){
+  if(!draft) return;
+  const d = draft, need = {area:3, room:3, wall:2, line:2, count:1, scale:2}[d.type];
+  if(d.pts.length < need){ toast(`Need at least ${need} points`); return; }
+  if(d.type==="scale"){ askScale(d.pts); return; }
+  job.seq = (job.seq||0)+1;
+  const base = {page:pageNum, pts:d.pts};
+  const added = [];
+  if(d.type==="room"){
+    const nm = "Room "+job.seq;
+    added.push({...base, id:uid(), type:"area", itemId:lastItem.roomCeil, name:nm});
+    added.push({...base, id:uid(), type:"wall", itemId:lastItem.roomWall, name:nm, closed:true, height:+job.wallHeight||0, deduct:0});
+  } else {
+    const nm = {area:"Area", wall:"Walls", line:"Length", count:"Count"}[d.type]+" "+job.seq;
+    const m = {...base, id:uid(), type:d.type, itemId:d.itemId, name:nm};
+    if(d.type==="wall"){ m.closed = d.pts.length>2; m.height = +job.wallHeight||0; m.deduct = 0; }
+    added.push(m);
+  }
+  job.meas.push(...added); selId = added[0].id;
+  cancelDraft(); save(); renderPane(); drawOverlay();
+}
+function cancelDraft(){ draft = null; hover = null; $("drawbar").hidden = true; drawOverlay(); }
+function undoPoint(){ if(draft){ draft.pts.pop(); if(!draft.pts.length) cancelDraft(); else drawOverlay(); } }
+
+function askScale(pts){
+  const units = pathLen(pts);
+  modal(`<h2>Set the scale</h2>
+    <p class="hint">You drew ${fmt(units/72*25.4,1)} mm on the sheet. How long is it in real life? Use the scale bar or a long written dimension.</p>
+    <label>Real length <input type="number" id="scLen" step="any" min="0" value="" style="width:110px">
+      <select id="scUnit"><option value="1">m</option><option value="0.001">mm</option></select></label>
+    <label><input type="checkbox" id="scAll" ${pdfDoc && pdfDoc.numPages>1?"checked":""}> Use on all pages without a scale</label>
+    <div class="actions"><button class="btn primary" id="scOk">Set scale</button><button class="btn" data-close>Cancel</button></div>`,
+    box=>{
+      const inp = box.querySelector("#scLen"); setTimeout(()=>inp.focus(), 30);
+      const go = ()=>{
+        const L = +inp.value * +box.querySelector("#scUnit").value;
+        if(!(L>0)){ inp.focus(); return; }
+        const k = L/units;
+        job.scales[pageNum] = k; if(job.scaleAuto) delete job.scaleAuto[pageNum]; job.scaleRef = job.scaleRef||{}; job.scaleRef[pageNum] = {pts, len:L};
+        if(box.querySelector("#scAll").checked && pdfDoc) for(let i=1;i<=pdfDoc.numPages;i++) if(!job.scales[i]) job.scales[i] = k;
+        save(); closeModal(); cancelDraft(); setTool("pan"); refreshViewer(); renderPane();
+        toast(`Scale set: about 1:${Math.round(k/PT_M)} at printed size`);
+      };
+      box.querySelector("#scOk").onclick = go;
+      inp.onkeydown = e=>{ if(e.key==="Enter") go(); };
+    }, ()=>cancelDraft());
+}
+function setScaleRatio(ratio){
+  job.scales[pageNum] = PT_M*ratio; if(job.scaleAuto) delete job.scaleAuto[pageNum]; if(job.scaleRef) delete job.scaleRef[pageNum];
+  save(); refreshViewer(); renderPane(); toast(`Scale set to 1:${ratio} (only right if the PDF is at true paper size)`);
+}
+
+/* ---------- reading the plans with Claude (like an estimator would) ---------- */
+let sampleFn = null, sampleLimits = null, aiCtl = null, aiStatus = "", aiJobId = null;
+const aiAutoOn = ()=>{ try{ return localStorage.getItem("conest.aiAuto")!=="0"; }catch(e){ return true; } };
+(async()=>{
+  try{ if(window.claude && claude.use){ sampleFn = await claude.use("sample"); if(sampleFn) sampleLimits = await sampleFn.limits().catch(()=>null); } }catch(e){ sampleFn = null; }
+  renderPane(); maybeStartAi();
+})();
+function maybeStartAi(){ if(sampleFn && pdfDoc && job && job.aiPending && aiAutoOn() && !aiCtl) startAi(); }
+const PAINT_RULES = `Painting estimator rules (First Class Finishes, Bendigo VIC):
+- Painted: internal walls, ceilings, doors and door frames, skirting and architraves, timber window frames, external cladding (weatherboard, fibre cement, Hebel/render), eaves/soffit linings, verandah/alfresco/porch/portico ceilings, pergolas, posts, downpipes (if not Colorbond-finished? count them anyway).
+- Not painted: Colorbond roofing, fascia and gutters, face or recycled brick, aluminium windows, pre-finished garage doors, pre-finished cladding. Slab edges excluded.
+- Pricing: one $/m² rate on floor area from the area schedule (living, garage, alfresco, portico and outbuildings; landing/plant/equipment areas excluded). Painted external cladding and render are extra m² at the same rate. Eaves are priced per lineal metre (lm) of eave. Floor area matters most, but give every quantity.
+- Count posts and downpipes from labels (DP, EDP, POST) and elevations, not guesses.`;
+async function sheetImages(doc, pg, maxImg){
+  const page = await doc.getPage(pg), vp1 = page.getViewport({scale:1});
+  const land = vp1.width >= vp1.height, tiles = Math.max(0, Math.min(maxImg-1, 6));
+  const cols = tiles>=6 ? (land?3:2) : tiles>=4 ? 2 : tiles>=2 ? (land?2:1) : 1;
+  const rows = tiles ? Math.min(Math.floor(tiles/cols), tiles>=6 ? (land?2:3) : 2) : 0;
+  const tileW = 1150, s = Math.min((cols||1)*tileW / vp1.width, Math.sqrt(36e6/(vp1.width*vp1.height)));
+  const vp = page.getViewport({scale:s}), cv = document.createElement("canvas");
+  cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
+  const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+  await page.render({canvasContext:ctx, viewport:vp}).promise;
+  const blob = (c)=>new Promise(r=>c.toBlob(r, "image/jpeg", 0.85));
+  const shrink = (src, maxPx)=>{ const k = Math.min(1, Math.sqrt(maxPx/(src.width*src.height))); const c = document.createElement("canvas"); c.width = Math.round(src.width*k); c.height = Math.round(src.height*k); c.getContext("2d").drawImage(src,0,0,c.width,c.height); return c; };
+  const images = [await blob(shrink(cv, 1.2e6))];
+  if(rows && cols){
+    const tw = cv.width/cols, th = cv.height/rows, ov = 0.06;
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+      const x = Math.max(0, c*tw - tw*ov), y = Math.max(0, r*th - th*ov), w = Math.min(cv.width-x, tw*(1+2*ov)), h = Math.min(cv.height-y, th*(1+2*ov));
+      const t = document.createElement("canvas"); t.width = Math.round(w); t.height = Math.round(h);
+      t.getContext("2d").drawImage(cv, x, y, w, h, 0, 0, t.width, t.height);
+      images.push(await blob(shrink(t, 1.2e6)));
+    }
+  }
+  cv.width = cv.height = 0;
+  return {images, grid: rows&&cols ? {rows, cols} : null};
+}
+async function sheetText(doc, pg){
+  const page = await doc.getPage(pg), vp = page.getViewport({scale:1});
+  let tc; try{ tc = await page.getTextContent(); }catch(e){ return ""; }
+  const items = tc.items.filter(i=>i.str && i.str.trim()).map(i=>{ const [a,b,c,d,e,f] = i.transform, h = Math.hypot(c,d)||8;
+    const p = vp.convertToViewportPoint(e,f); return {s:i.str, x:p[0], y:p[1]-h, w:i.width||0, h}; });
+  const segs = textSegments(items);
+  let out = segs.map(s=>`${Math.round(s.x/vp.width*100)},${Math.round(s.y/vp.height*100)}: ${s.text}`).join("\n");
+  if(out.length > 14000) out = out.slice(0, 14000) + "\n…(text cut)";
+  return out;
+}
+function sheetPrompt(pg, n, grid, text, nImg){
+  return `${PAINT_RULES}
+
+You are doing a painting takeoff from a builder's plan set, the way an experienced estimator reads it by eye. This is sheet ${pg} of ${n}.
+${nImg ? `Images: image 1 is the whole sheet.${grid ? ` Images 2-${nImg} are zoomed tiles of it in a ${grid.rows} row × ${grid.cols} column grid, left to right then top to bottom, overlapping slightly.` : ""}` : "No image is available, only the text."}
+${text ? `Text printed on the sheet, extracted exactly from the PDF ("x%,y%: text", position across and down the sheet). Prefer these exact numbers over reading them from the image:\n${text}` : "The sheet has no text layer (scanned), so read everything from the images."}
+
+Work out what this sheet is and record everything a painter needs from it: area schedules, room names and sizes, ceiling heights, wall heights and plate heights from elevations/sections, external wall materials per elevation and whether each is painted, eaves widths, verandah/alfresco/porch ceilings, door and window counts and types (timber or aluminium), posts, downpipes, garage doors, finishes or colour schedule notes, anything that changes the painting scope. On a 3D render, note visible materials and colours. Give dimensions in metres. Only report what the sheet shows; say where a figure is estimated.
+
+Reply with only JSON:
+{"sheet_type":"floor_plan|elevations|section|site_plan|roof_plan|render_3d|schedule|electrical|details|cover|other","title":"…","scale":"1:100 or null",
+ "quantities":[{"what":"e.g. Total floor area incl garage","qty":0,"unit":"m2|lm|each|m","how":"where on the sheet / working","confidence":"high|medium|low"}],
+ "facts":["short notes, e.g. 'Ceiling height 2.55 m (section A)', 'South elevation: face brick to sill, Linea weatherboard above (painted)'"]}`;
+}
+function combinePrompt(j){
+  const items = j.items.map(i=>`${i.id}: ${i.name} (${UNIT[i.unit]})`).join("\n");
+  const sheets = j.ai.sheets.map(s=>JSON.stringify({sheet:s.page, type:s.sheet_type, title:s.title, scale:s.scale, quantities:s.quantities, facts:s.facts, error:s.error})).join("\n");
+  return `${PAINT_RULES}
+
+Below are notes read from each sheet of one builder's plan set. Combine them into a single painting takeoff for the whole job, like a careful estimator.
+- Don't double count: the same downpipe or window shows on plans and elevations. Say which sheet you used.
+- Work out what isn't written: internal wall m² = room perimeters × ceiling height (deduct only big openings), ceiling m² from room or floor areas, external painted wall m² from elevations (painted materials only, less openings), eaves in lineal metres along the roof edge where there is a lined eave (not along alfresco/portico edges, whose ceilings are in the floor area).
+- Show the working for every figure so it can be checked by hand, e.g. "LIVING 96 + GARAGE 36 + PORCH 4.5 (schedule, sheet 2)".
+- Where two methods are possible (schedule vs dimensions, plan count vs elevation count), do both and list the comparison in "checks".
+- Put anything unclear that the painter should confirm in "questions".
+
+Rate items in the estimating app (use these ids in item_id where one fits, otherwise null):
+${items}
+
+Sheet notes:
+${sheets}
+
+Reply with only JSON:
+{"summary":"one or two sentences on the job","items":[{"item_id":"floor|…|null","label":"…","qty":0,"unit":"m2|lm|each","working":"…","sheets":[1],"confidence":"high|medium|low"}],"checks":["…"],"questions":["…"]}`;
+}
+function setAiStatus(t){ aiStatus = t; if(tab==="takeoff" && job && job.id===aiJobId){ const el = $("aiStatus"); if(el) el.textContent = t; else renderPane(); } }
+function aiError(e){
+  const c = e && e.code;
+  if(c==="cancelled") return "Stopped.";
+  if(c==="not_granted" || c==="sampling_disabled" || c==="capability_disabled" || c==="not_declared") return "Claude isn't allowed for this app in this view, so the plans weren't read.";
+  if(c==="rate_limited") return "Claude usage limit reached. Try again later.";
+  if(c==="session_expired") return "Sign in to Claude again, then try again.";
+  if(c==="refused") return "Claude wouldn't read this plan set.";
+  return "Reading the plans failed part way. Try again.";
+}
+async function startAi(){
+  if(!sampleFn || !pdfDoc || aiCtl) return;
+  const j = job, doc = pdfDoc, n = doc.numPages;
+  aiCtl = new AbortController(); aiJobId = j.id; const signal = aiCtl.signal;
+  j.aiPending = false; j.ai = {sheets:[], when:Date.now()}; save(); renderPane();
+  const maxImg = (sampleLimits && sampleLimits.images && sampleLimits.images.maxCount) || 0;
+  let done = 0;
+  const readSheet = async pg=>{
+    const {images, grid} = maxImg ? await sheetImages(doc, pg, maxImg) : {images:[], grid:null};
+    const text = await sheetText(doc, pg);
+    let res;
+    try{ res = await sampleFn.json(sheetPrompt(pg, n, grid, text, images.length), {...(images.length?{images}:{}), modelTier:"complex", signal}); }
+    catch(e){ if(e && e.code==="invalid_json" || e && e.code==="image_rejected") res = {sheet_type:"other", error:"couldn't read this sheet"}; else throw e; }
+    j.ai.sheets.push({page:pg, sheet_type:res.sheet_type, title:res.title, scale:res.scale, quantities:Array.isArray(res.quantities)?res.quantities:[], facts:Array.isArray(res.facts)?res.facts:[], error:res.error});
+    done++; setAiStatus(`Read ${done} of ${n} sheets…`); save();
+  };
+  try{
+    setAiStatus(`Reading ${n} sheet${n>1?"s":""} with Claude… this can take a few minutes`);
+    let next = 1; const worker = async()=>{ while(next<=n && !signal.aborted){ const pg = next++; await readSheet(pg); } };
+    await Promise.all([worker(), worker()]);
+    j.ai.sheets.sort((a,b)=>a.page-b.page);
+    setAiStatus("Putting the takeoff together…");
+    const out = await sampleFn.json(combinePrompt(j), {modelTier:"complex", signal});
+    applyAi(j, out);
+    aiStatus = "";
+    if(job===j){ tab = "quote"; toast("Claude's takeoff is ready. Check the figures before quoting."); }
+  }catch(e){ aiStatus = aiError(e); j.ai.error = aiStatus; }
+  finally{ aiCtl = null; save(); renderPane(); drawOverlay(); }
+}
+function applyAi(j, out){
+  j.areas = j.areas.filter(a=>a.src!=="ai");
+  const rows = (out && Array.isArray(out.items) ? out.items : []).filter(x=>x && +x.qty>0);
+  const had = new Set(); j.items.forEach(it=>{ if(itemQtyFor(j, it).n) had.add(it.id); });
+  rows.forEach(x=>{
+    const it = j.items.find(i=>i.id===x.item_id);
+    const unitOk = it && (!x.unit || UNIT[it.unit]===UNIT[x.unit] || it.unit===x.unit);
+    const itemId = it && unitOk ? it.id : null;
+    j.areas.push({id:uid(), src:"ai", label:String(x.label||"Item"), m2:r2(+x.qty), unit:x.unit||"", itemId, include: !!itemId && !had.has(itemId),
+      working:String(x.working||""), sheets:Array.isArray(x.sheets)?x.sheets:[], confidence:x.confidence||"", kind:"ai"});
+  });
+  j.ai.summary = out && out.summary || ""; j.ai.checks = out && Array.isArray(out.checks) ? out.checks : []; j.ai.questions = out && Array.isArray(out.questions) ? out.questions : [];
+  j.ai.done = Date.now();
+}
+function itemQtyFor(j, it){ const keep = job; job = j; try{ return itemQty(it); } finally{ job = keep; } }
+function paneAi(){
+  let h = `<div class="group"><div class="ghead">Claude's takeoff`;
+  if(!sampleFn){ return h + `</div><p class="hint">Open this app inside Claude (claude.ai) to have Claude read every sheet, including elevations, sections and 3D renders, and work out the quantities.</p></div>`; }
+  const running = aiCtl && aiJobId===job.id;
+  h += running ? `<button class="btn sm" id="aiStop" style="margin-left:auto">Stop</button>` : `<button class="btn sm primary" id="aiGo" style="margin-left:auto" ${pdfDoc?"":"disabled"}>${job.ai&&job.ai.done?"Read again":"Read plans with Claude"}</button>`;
+  h += `</div>`;
+  const st = running ? aiStatus : (job.ai && job.ai.error) || "";
+  h += `<p class="hint" id="aiStatus" aria-live="polite">${esc(st)}</p>`;
+  if(!running && !(job.ai && job.ai.done)) h += `<p class="hint">Claude looks at each sheet like an estimator: plans, elevations, sections, schedules and 3D renders. It uses your Claude usage. <label><input type="checkbox" id="aiAuto" data-f="aiAuto" ${aiAutoOn()?"checked":""}> Start automatically when I load a PDF</label></p>`;
+  const ai = job.ai;
+  if(ai && ai.done){
+    if(ai.summary) h += `<p style="margin:0">${esc(ai.summary)}</p>`;
+    const rows = job.areas.filter(a=>a.src==="ai");
+    rows.forEach(a=>{
+      const it = job.items.find(i=>i.id===a.itemId);
+      h += `<div class="row" data-airow="${a.id}">
+        <label style="display:flex;gap:8px;align-items:center;min-width:0"><input type="checkbox" data-area="${a.id}" data-f="include" ${a.include?"checked":""} ${it?"":"disabled"} aria-label="Use in quote"><input class="nm" data-area="${a.id}" data-f="label" value="${esc(a.label)}" aria-label="Name"></label>
+        <span class="q num"><input type="number" step="0.01" min="0" data-area="${a.id}" data-f="m2" value="${a.m2}" style="width:84px" aria-label="Quantity"> ${esc(it?UNIT[it.unit]:(UNIT[a.unit]||a.unit))}</span>
+        <div class="meta" style="display:block">${esc(a.working)}${a.sheets.length?` <span>(sheet ${a.sheets.map(esc).join(", ")})</span>`:""} ${a.confidence&&a.confidence!=="high"?`<span class="chip">${esc(a.confidence)} confidence</span>`:""}</div>
+        <div class="meta"><select data-area="${a.id}" data-f="itemId" aria-label="Rate item"><option value="">Not priced</option>${job.items.map(i=>`<option value="${i.id}" ${i.id===a.itemId?"selected":""}>${esc(i.name)}</option>`).join("")}</select></div></div>`;
+    });
+    if(ai.checks && ai.checks.length) h += `<h3>Cross-checks</h3><ul class="hint" style="margin:0;padding-left:18px">${ai.checks.map(c=>`<li>${esc(c)}</li>`).join("")}</ul>`;
+    if(ai.questions && ai.questions.length) h += `<h3>To confirm</h3><ul class="hint" style="margin:0;padding-left:18px">${ai.questions.map(c=>`<li>${esc(c)}</li>`).join("")}</ul>`;
+    h += `<details><summary class="hint">What Claude read on each sheet</summary><div class="hint">${ai.sheets.map(s=>`<p><b>Sheet ${s.page}</b> ${esc(s.title||s.sheet_type||"")}${s.error?` (${esc(s.error)})`:""}<br>${(s.facts||[]).map(esc).join("<br>")}</p>`).join("")}</div></details>
+      <p class="hint">Ticked figures go into the quote. A figure is left unticked when the plan's schedule or your own measuring already covers that item, so you can compare.</p>`;
+  }
+  return h + `</div>`;
+}
+
+/* ---------- tool bar ---------- */
+function setTool(t){
+  if(draft) cancelDraft();
+  tool = t; $("viewer").dataset.tool = t;
+  document.querySelectorAll("#tools button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.tool===t));
+  renderToolOpts(); drawOverlay();
+}
+function itemSelect(id, unit, val){
+  return `<select id="${id}">${job.items.filter(i=>i.unit===unit).map(i=>`<option value="${i.id}" ${i.id===val?"selected":""}>${esc(i.name)}</option>`).join("")}</select>`;
+}
+function renderToolOpts(){
+  const o = $("toolOpts"); if(!job){ o.innerHTML=""; return; }
+  let h = "";
+  const fixItem = (key, unit)=>{ if(!job.items.some(i=>i.id===lastItem[key] && i.unit===unit)){ const f = job.items.find(i=>i.unit===unit); lastItem[key] = f ? f.id : null; } };
+  if(tool==="room"){ fixItem("roomCeil","m2"); fixItem("roomWall","m2");
+    h = `<label>Ceiling ${itemSelect("optCeil","m2",lastItem.roomCeil)}</label><label>Walls ${itemSelect("optWall","m2",lastItem.roomWall)}</label>`; }
+  else if(TOOL_UNIT[tool]){ fixItem(tool, TOOL_UNIT[tool]); h = `<label>Measuring ${itemSelect("optItem",TOOL_UNIT[tool],lastItem[tool])}</label>`; }
+  if(tool==="room"||tool==="wall") h += `<label>Wall height <input type="number" id="optH" step="0.05" min="0" value="${job.wallHeight}" style="width:70px"> m</label>`;
+  if(tool==="scale") h = `<span>Click both ends of the scale bar, or</span><select id="optRatio"><option value="">pick a ratio…</option>${[20,25,50,75,100,150,200,250,500].map(r=>`<option value="${r}">1:${r}</option>`).join("")}</select>`;
+  if(["area","wall","line","room"].includes(tool)) h += `<span class="hint">Shift = straight lines · click first point or double-click to finish</span>`;
+  o.innerHTML = h;
+  const on = (id, f)=>{ const el = $(id); if(el) el.onchange = ()=>f(el.value); };
+  on("optCeil", v=>lastItem.roomCeil=v); on("optWall", v=>lastItem.roomWall=v);
+  on("optItem", v=>{ lastItem[tool]=v; if(draft) draft.itemId=v; drawOverlay(); });
+  on("optH", v=>{ job.wallHeight = +v||0; save(); updateReadout(); });
+  on("optRatio", v=>{ if(v) setScaleRatio(+v); });
+}
+function refreshViewer(){
+  const has = !!pdfDoc;
+  $("empty").hidden = has; $("stage").style.visibility = has ? "" : "hidden";
+  $("pager").hidden = !(has && pdfDoc.numPages>1);
+  if(has) $("pgLbl").textContent = `Page ${pageNum} / ${pdfDoc.numPages}`;
+  const k = job && job.scales[pageNum];
+  $("scaleInfo").innerHTML = !has ? "" : k ? `<span title="If the PDF is at true paper size, this should match the scale written on the plan">Scale ≈ <b class="num">1:${Math.round(k/PT_M)}</b>${job.scaleAuto&&job.scaleAuto[pageNum]?" (read from plan)":""}</span>` : `<span class="chip">No scale on this page</span>`;
+  const b = $("banner");
+  if(has && !k){ b.hidden = false; b.textContent = "Set the scale first: pick Scale, click both ends of the drawn scale bar, then type its real length."; }
+  else b.hidden = true;
+  drawOverlay();
+}
+
+/* ---------- side panel ---------- */
+function renderPane(){
+  document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected", b.dataset.tab===tab));
+  const p = $("pane");
+  if(!job){ p.innerHTML = ""; return; }
+  if(tab==="takeoff") p.innerHTML = paneTakeoff();
+  if(tab==="rates") p.innerHTML = paneRates();
+  if(tab==="quote") p.innerHTML = paneQuote();
+  if(tab==="schedule") p.innerHTML = paneSchedule();
+}
+function areaCheck(){
+  // a plan set can carry several schedules (house, shed…), each with its own total
+  const tots = job.areas.filter(a=>a.kind==="total" && a.src!=="ai");
+  if(!tots.length || tots.some(t=>t.include)) return null;
+  const pages = new Set(tots.map(t=>t.page));
+  const lines = job.areas.filter(a=>a.kind!=="total" && a.kind!=="site" && a.src!=="ai" && a.src!=="allow" && (pages.has(a.page) || a.include));
+  const inc = r2(lines.filter(a=>a.include).reduce((s,a)=>s+(+a.m2||0),0));
+  const all = r2(lines.reduce((s,a)=>s+(+a.m2||0),0));
+  const total = r2(tots.reduce((s,t)=>s+(+t.m2||0),0));
+  return {total, inc, all, left:lines.filter(a=>!a.include), ok:Math.abs(all - total) < 0.05*tots.length};
+}
+function paneAuto(){
+  const r = job.autoReport;
+  let h = `<div class="group"><div class="ghead">Auto takeoff<button class="btn sm" id="reAuto" style="margin-left:auto">${r?"Run again":"Run auto takeoff"}</button></div>`;
+  if(r){
+    if(!r.textPages) h += `<div class="warns"><div>This PDF has no readable text (probably scanned), so nothing could be read off it. Set the scale and trace the outline with <b>Area</b>, or type the floor area below.</div></div>`;
+    else {
+      const bits = [];
+      bits.push(r.scale.length ? `Scale read from the plan: ${r.scale.map(esc).join(", ")}.` : `No scale written on the plan. Use <b>Scale</b> on the scale bar.`);
+      const dc = Object.entries(r.dimCheck||{});
+      if(dc.length) bits.push("Scale checked against written dimensions: " + dc.map(([pg,c])=>c.fixed ? `p${pg} <b>corrected to 1:${c.fixed}</b> (${c.alt.n} dimensions agree)` : c.ok>=2 ? `p${pg} ✓ ${c.ok} agree` : `p${pg} not confirmed`).join(", ") + ".");
+      const cs = Object.entries(r.counts);
+      (r.separate||[]).forEach(b=>bits.push(`Separate building on p${b.page} (${b.labels.map(esc).join(", ")}, ${fmt(b.m2)} m²) left out, as it's usually quoted on its own. Tick its areas to add it.`));
+      bits.push(r.eaves ? (r.eaves.none ? "Plan says no eaves." : `Eaves measured off the drawing (p${r.eaves.page}): ${fmt(r.eaves.lm)} lm in ${r.eaves.n} runs, about ${Math.round(r.eaves.width*1000)} mm wide. Check the highlighted lines.`) : "No eaves found on the drawing. Trace them with Length if there are some.");
+      bits.push(cs.length ? "Tags counted: " + cs.map(([k,c])=>`${esc(k)} ${c.n} (p${c.page}${c.others.length?`, also ${c.others.map(esc).join(", ")}`:""})`).join(", ") + "." : "No DP, POST, D or W tags found.");
+      h += `<p class="hint">${bits.join(" ")}</p>`;
+    }
+  }
+  h += `</div><div class="group"><div class="ghead">Floor areas<span class="tot num">${fmt(job.areas.filter(a=>a.include && a.src!=="ai" && a.src!=="allow").reduce((s,a)=>s+(+a.m2||0),0))} m²</span></div>`;
+  if(!job.areas.some(a=>a.src!=="ai" && a.src!=="allow")) h += `<p class="hint">No area schedule found. Type the floor area here, or trace it with <b>Area</b>.</p>`;
+  job.areas.filter(a=>a.src!=="ai" && a.src!=="allow").forEach(a=>{
+    h += `<div class="row ${a.id===selId?"sel":""}" data-arow="${a.id}">
+      <label style="display:flex;gap:8px;align-items:center;min-width:0"><input type="checkbox" data-area="${a.id}" data-f="include" ${a.include?"checked":""} aria-label="Include"><input class="nm" data-area="${a.id}" data-f="label" value="${esc(a.label)}" aria-label="Name"></label>
+      <span class="q num"><input type="number" step="0.01" min="0" data-area="${a.id}" data-f="m2" value="${a.m2}" style="width:84px" aria-label="m²"> m²</span>
+      <div class="meta">${a.kind==="total"?'<span class="chip">plan total</span>':a.kind==="site"?'<span class="chip">site area</span>':a.kind==="room"?'<span>room label</span>':a.auto?'<span>from schedule</span>':'<span>typed in</span>'}${a.page?`<span>p${a.page}</span>`:""}
+        <button class="btn sm danger" data-adel="${a.id}" style="margin-left:auto">Delete</button></div></div>`;
+  });
+  const c = areaCheck();
+  if(c) h += c.ok ? `<p class="hint" style="color:var(--good)">The schedule lines add up to the plan's total of ${fmt(c.total)} m²${c.all!==c.total?` (${fmt(c.all)} with the plan's rounding)`:""}.${c.left.length?` Left out of the price: ${c.left.map(a=>esc(a.label)+" "+fmt(+a.m2)).join(", ")}.`:""}</p>` : `<div class="warns"><div>The schedule lines add up to ${fmt(c.all)} m², but the plan's total says ${fmt(c.total)} m². Check the figures.</div></div>`;
+  h += `<div class="actions"><button class="btn sm" id="addArea">Add area by hand</button></div></div>`;
+  const al = job.areas.filter(a=>a.src==="allow");
+  if(al.length){ h += `<div class="group"><div class="ghead">Allowances & notes</div>`;
+    al.forEach(a=>{ const it = job.items.find(i=>i.id===a.itemId);
+      h += `<div class="row"><label style="display:flex;gap:8px;align-items:center;min-width:0"><input type="checkbox" data-area="${a.id}" data-f="include" ${a.include?"checked":""} aria-label="Use in quote"><input class="nm" data-area="${a.id}" data-f="label" value="${esc(a.label)}" aria-label="Name"></label>
+        <span class="q num"><input type="number" step="1" min="0" data-area="${a.id}" data-f="m2" value="${a.m2}" style="width:70px" aria-label="Quantity"> ${esc(it?UNIT[it.unit]:"")}</span>
+        <div class="meta"><span>${esc(it?it.name:"")}</span><button class="btn sm danger" data-adel="${a.id}" style="margin-left:auto">Delete</button></div></div>`; });
+    h += `</div>`; }
+  return h;
+}
+function paneTakeoff(){
+  const top = paneAi() + paneAuto();
+  if(!job.meas.length) return top + `<p class="hint">Nothing traced yet. Pick <b>Room</b> and click around a room's corners to get its walls and ceiling in one go. Use <b>Count</b> for doors, windows, posts and downpipes.</p>`;
+  let h = top;
+  job.items.forEach(it=>{
+    const ms = job.meas.filter(m=>m.itemId===it.id); if(!ms.length) return;
+    let tot = 0, miss = 0; ms.forEach(m=>{ const q = measQty(m); if(q==null) miss++; else tot += q; });
+    h += `<div class="group"><div class="ghead"><span class="sw" style="background:${it.color}"></span>${esc(it.name)}<span class="tot num">${it.unit==="each"?tot:fmt(tot)} ${UNIT[it.unit]}</span></div>`;
+    ms.forEach(m=>{
+      const q = measQty(m);
+      h += `<div class="row ${m.id===selId?"sel":""}" data-row="${m.id}">
+        <input class="nm" data-f="name" data-id="${m.id}" value="${esc(m.name)}" aria-label="Name">
+        <span class="q num">${q==null?'<span class="chip">no scale</span>':(m.type==="count"?q:fmt(q))+" "+UNIT[it.unit]}</span>
+        <div class="meta">${pdfDoc&&pdfDoc.numPages>1?`<span>p${m.page}</span>`:""}
+          ${m.type==="wall"?`<span class="num">${job.scales[m.page]?fmt(pathLen(m.pts,m.closed)*job.scales[m.page])+" m":"–"} ×</span><label>h <input type="number" step="0.05" min="0" data-f="height" data-id="${m.id}" value="${m.height}"></label><label>less <input type="number" step="0.1" min="0" data-f="deduct" data-id="${m.id}" value="${m.deduct||0}"> m²</label><label><input type="checkbox" data-f="closed" data-id="${m.id}" ${m.closed?"checked":""}> closed</label>`:""}
+          <select data-f="itemId" data-id="${m.id}" aria-label="Item">${job.items.filter(i=>i.unit===it.unit).map(i=>`<option value="${i.id}" ${i.id===m.itemId?"selected":""}>${esc(i.name)}</option>`).join("")}</select>
+          <button class="btn sm danger" data-del="${m.id}" style="margin-left:auto">Delete</button></div></div>`;
+    });
+    h += `</div>`;
+  });
+  const orphan = job.meas.filter(m=>!job.items.some(i=>i.id===m.itemId));
+  if(orphan.length) h += `<div class="warns"><div>${orphan.length} measurement(s) belong to a deleted rate item and are not priced.</div></div>`;
+  return h + `<p class="hint">Click a row to find it on the plan. Wall "less" deducts openings such as big windows or robes in m².</p>`;
+}
+function paneRates(){
+  let h = `<h3>How to price</h3><div class="actions"><button class="btn" id="preProp">Whole property $/m²</button><button class="btn" id="preItem">Itemised</button></div>
+    <p class="hint">Whole property prices the floor area at one rate, adds painted cladding/render, eaves, posts and downpipes, and lists doors, windows and trims as options. Itemised adds every measured item to the total.</p><h3>Rates (ex GST)</h3><div style="overflow-x:auto"><table class="rates"><thead><tr><th></th><th>Item</th><th>Unit</th><th class="r">Rate $</th><th>On quote</th><th></th></tr></thead><tbody>`;
+  job.items.forEach(it=>{
+    h += `<tr><td><input type="color" data-it="${it.id}" data-f="color" value="${it.color}" aria-label="Colour"></td>
+      <td><input type="text" data-it="${it.id}" data-f="name" value="${esc(it.name)}" aria-label="Item name"></td>
+      <td><select data-it="${it.id}" data-f="unit" aria-label="Unit">${Object.keys(UNIT).filter(u=>u!=="hr").map(u=>`<option value="${u}" ${u===it.unit?"selected":""}>${UNIT[u]}</option>`).join("")}</select></td>
+      <td class="r"><input type="number" step="0.5" min="0" data-it="${it.id}" data-f="rate" value="${it.rate}" aria-label="Rate"></td>
+      <td><select data-it="${it.id}" data-f="quoteAs" aria-label="On quote">${Object.entries(QUOTE_AS).map(([k,v])=>`<option value="${k}" ${k===(it.quoteAs||"add")?"selected":""}>${v}</option>`).join("")}</select></td>
+      <td><button class="btn sm danger" data-delit="${it.id}" aria-label="Delete item">✕</button></td></tr>`;
+  });
+  h += `</tbody></table></div><div class="actions"><button class="btn" id="addItem">Add rate item</button><button class="btn" id="saveDefaults">Save as my default rates</button></div>
+    <p class="hint">Rates belong to this job. "Save as my default rates" makes new jobs start with them.</p>
+    <h3>Extra lines</h3><p class="hint">For things you don't measure off the plan: labour hours, scaffold, prep, materials.</p>
+    <div style="overflow-x:auto"><table class="rates"><thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th class="r">Rate $</th><th></th></tr></thead><tbody>`;
+  job.extras.forEach(x=>{
+    h += `<tr><td><input type="text" data-x="${x.id}" data-f="desc" value="${esc(x.desc)}" aria-label="Description"></td>
+      <td><input type="number" step="any" min="0" data-x="${x.id}" data-f="qty" value="${x.qty}" style="width:60px" aria-label="Quantity"></td>
+      <td><input type="text" data-x="${x.id}" data-f="unit" value="${esc(x.unit)}" style="width:48px" aria-label="Unit"></td>
+      <td class="r"><input type="number" step="0.5" min="0" data-x="${x.id}" data-f="rate" value="${x.rate}" aria-label="Rate"></td>
+      <td><button class="btn sm danger" data-delx="${x.id}" aria-label="Delete line">✕</button></td></tr>`;
+  });
+  h += `</tbody></table></div><div class="actions"><button class="btn" id="addX">Add line</button><button class="btn" id="addHrs">Add labour hours ($120/hr)</button></div>
+    <label>GST % <input type="number" id="gstIn" step="0.5" min="0" value="${job.gst}"></label>`;
+  return h;
+}
+function quoteWarnings(q){
+  const w = [];
+  q.lines.forEach(l=>{ if(!l.rate) w.push(`No rate set for <b>${esc(l.desc)}</b> (${fmt(l.qty, l.unit==="ea"?0:2)} ${l.unit}), so it adds $0.`); });
+  q.options.forEach(l=>{ if(!l.rate) w.push(`Option <b>${esc(l.desc)}</b> has no rate yet. Set it in Rates.`); });
+  const c = areaCheck(); if(c && !c.ok) w.push(`Schedule lines add up to ${fmt(c.all)} m², but the plan's total says ${fmt(c.total)} m². Check the Takeoff tab.`);
+  const dcs = (job.autoReport||{}).dimCheck || {};
+  Object.entries(job.scaleAuto||{}).forEach(([pg,t])=>{ if(!(dcs[pg] && dcs[pg].ok>=2 && !dcs[pg].fixed) && job.meas.some(m=>m.page==pg && m.type!=="count")) w.push(`Page ${pg} scale was read from the text (${esc(t)}). Check it against a written dimension.`); });
+  const unscaled = {}; job.meas.forEach(m=>{ if(m.type!=="count" && !job.scales[m.page]) unscaled[m.page]=(unscaled[m.page]||0)+1; });
+  Object.entries(unscaled).forEach(([pg,n])=>w.push(`Page ${pg} has no scale, so ${n} measurement(s) aren't counted.`));
+  job.meas.forEach(m=>{ if(m.type==="wall" && !(+m.height>0)) w.push(`<b>${esc(m.name)}</b> walls have no height.`); });
+  return w;
+}
+function paneQuote(){
+  const q = quoteLines();
+  const w = quoteWarnings(q);
+  let h = `<h3>${esc(job.name)}</h3>`;
+  if(w.length) h += `<div class="warns">${w.map(x=>`<div>${x}</div>`).join("")}</div>`;
+  if(!q.lines.length && !q.options.length) return h + `<p class="hint">Measure something on the plan or add an extra line to see a quote.</p>`;
+  h += `<div style="overflow-x:auto"><table><thead><tr><th>Item</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead><tbody>`;
+  q.lines.forEach(l=>{ h += `<tr><td>${esc(l.desc)}</td><td class="r num">${fmt(l.qty, l.unit==="ea"?0:2)} ${esc(l.unit)}</td><td class="r num">${money(l.rate)}</td><td class="r num">${money(l.amount)}</td></tr>`; });
+  h += `</tbody></table></div>
+    <div class="totals"><span>Subtotal (ex GST)</span><span class="num">${money(q.ex)}</span><span>GST ${fmt(+job.gst,1)}%</span><span class="num">${money(q.gst)}</span><span class="big">Total inc GST</span><span class="big num">${money(q.inc)}</span></div>
+    ${q.options.length?`<h3>Options (not in total)</h3><div style="overflow-x:auto"><table><thead><tr><th>Option</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Ex GST</th><th class="r">Inc GST</th></tr></thead><tbody>${q.options.map(o=>`<tr><td>${esc(o.desc)}</td><td class="r num">${fmt(o.qty, o.unit==="ea"?0:2)} ${esc(o.unit)}</td><td class="r num">${money(o.rate)}</td><td class="r num">${money(o.amount)}</td><td class="r num">${money(o.inc)}</td></tr>`).join("")}</tbody></table></div>`:""}
+    <div class="actions"><button class="btn primary" id="copyQuote">Copy quote</button><button class="btn" id="copyCsv">Copy for spreadsheet</button></div>
+    <p class="hint">Qty is rounded to 2 decimals before pricing, so the lines match when you key them into Xero (qty × unit price). Check the scale on each page against a written dimension before sending.</p>`;
+  return h;
+}
+function quoteText(tabs){
+  const q = quoteLines(); const L = [];
+  if(tabs){ L.push(["Description","Quantity","Unit","Unit price","Amount"].join("\t")); q.lines.forEach(l=>L.push([l.desc,l.qty,l.unit,l.rate.toFixed(2),l.amount.toFixed(2)].join("\t"))); L.push(["Subtotal ex GST","","","",q.ex.toFixed(2)].join("\t"),["GST","","","",q.gst.toFixed(2)].join("\t"),["Total inc GST","","","",q.inc.toFixed(2)].join("\t"));
+    if(q.options.length){ L.push("", "Options (not in total)"); q.options.forEach(o=>L.push([o.desc,o.qty,o.unit,o.rate.toFixed(2),o.amount.toFixed(2)].join("\t"))); } }
+  else { L.push(job.name, ""); q.lines.forEach(l=>L.push(`${l.desc}: ${fmt(l.qty, l.unit==="ea"?0:2)} ${l.unit} @ ${money(l.rate)} = ${money(l.amount)}`)); L.push("", `Subtotal ex GST: ${money(q.ex)}`, `GST: ${money(q.gst)}`, `Total inc GST: ${money(q.inc)}`);
+    if(q.options.length){ L.push("", "Options (not included in the total):"); q.options.forEach(o=>L.push(`${o.desc}: ${fmt(o.qty, o.unit==="ea"?0:2)} ${o.unit} @ ${money(o.rate)} = ${money(o.amount)} ex GST (${money(o.inc)} inc GST)`)); } }
+  return L.join("\n");
+}
+
+/* ---------- panel events ---------- */
+$("pane").addEventListener("input", e=>{
+  const t = e.target, f = t.dataset.f; if(!f) return; if(job) job.updated = Date.now();
+  const val = t.type==="checkbox" ? t.checked : (t.type==="number" ? (t.value===""?0:+t.value) : t.value);
+  if(t.dataset.id){ const m = job.meas.find(x=>x.id===t.dataset.id); if(!m) return; m[f] = val;
+    save(); drawOverlay(); if(f!=="name"){ const sc = $("pane").scrollTop; renderPane(); $("pane").scrollTop = sc; } }
+  if(t.dataset.it){ const it = job.items.find(x=>x.id===t.dataset.it); if(!it) return; it[f] = val; save(); drawOverlay(); if(f==="unit") { renderPane(); renderToolOpts(); } else if(f==="name") renderToolOpts(); }
+  if(t.id==="aiAuto"){ try{ localStorage.setItem("conest.aiAuto", t.checked?"1":"0"); }catch(e){} return; }
+  if(t.dataset.area){ const a = job.areas.find(x=>x.id===t.dataset.area); if(!a) return; a[f] = val; if(f==="itemId" && !val) a.include = false; save(); drawOverlay();
+    if(f!=="label"){ const sc = $("pane").scrollTop; renderPane(); $("pane").scrollTop = sc; } return; }
+  if(t.dataset.x){ const x = job.extras.find(y=>y.id===t.dataset.x); if(!x) return; x[f] = val; save(); }
+  if(t.id==="gstIn"){ job.gst = +t.value||0; save(); }
+});
+$("pane").addEventListener("click", async e=>{
+  const t = e.target.closest("button,[data-row],[data-arow]"); if(!t) return;
+  if(t.dataset.del){ job.meas = job.meas.filter(m=>m.id!==t.dataset.del); save(); renderPane(); drawOverlay(); return; }
+  if(t.dataset.row && !e.target.closest("input,select,button,label")){ const m = job.meas.find(x=>x.id===t.dataset.row); selId = m.id;
+    if(m.page!==pageNum){ pageNum = m.page; await showPage(false); }
+    renderPane(); drawOverlay(); scrollToMeas(m); return; }
+  if(t.dataset.delit){ const id = t.dataset.delit, n = job.meas.filter(m=>m.itemId===id).length;
+    const del = ()=>{ job.items = job.items.filter(i=>i.id!==id); save(); renderPane(); renderToolOpts(); drawOverlay(); };
+    if(!n) del(); else confirmBox(`Delete this rate item?`, `${n} measurement(s) use it. They'll stay on the plan but won't be priced until you move them to another item.`, "Delete item", del);
+    return; }
+  if(t.dataset.delx){ job.extras = job.extras.filter(x=>x.id!==t.dataset.delx); save(); renderPane(); return; }
+  if(t.id==="addItem"){ job.items.push({id:uid(), name:"New item", unit:"m2", rate:0, color:COLORS[job.items.length%COLORS.length]}); save(); renderPane(); renderToolOpts(); return; }
+  if(t.id==="preProp" || t.id==="preItem"){ const prop = t.id==="preProp";
+    job.items.forEach(it=>{ it.quoteAs = it.id==="floor" ? (prop?"add":"none") : ["posts","eaves"].includes(it.id) ? "add" : it.id==="ext" ? (prop?"option":"add") : it.unit==="m2" ? (prop?"none":"add") : (prop?"option":"add"); });
+    save(); renderPane(); toast(prop?"Pricing the whole property per m²":"Pricing every item"); return; }
+  if(t.id==="aiGo"){ startAi(); return; }
+  if(t.id==="aiStop"){ if(aiCtl) aiCtl.abort(); return; }
+  if(t.id==="reAuto"){ await runAuto(false); toast("Auto takeoff updated"); return; }
+  if(t.id==="addArea"){ job.areas.push({id:uid(), label:"Floor area", m2:0, include:true, kind:"schedule", itemId:"floor", page:null}); save(); renderPane(); return; }
+  if(t.dataset.adel){ job.areas = job.areas.filter(a=>a.id!==t.dataset.adel); save(); renderPane(); drawOverlay(); return; }
+  if(t.dataset.arow && !e.target.closest("input,select,button,label")){ const a = job.areas.find(x=>x.id===t.dataset.arow); if(!a) return; selId = a.id;
+    if(a.page && a.box){ if(a.page!==pageNum){ pageNum = a.page; await showPage(false); } const [x,y,w,hh] = a.box; scrollToMeas({pts:[[x,y],[x+w,y+hh]]}); }
+    renderPane(); drawOverlay(); return; }
+  if(t.id==="saveDefaults"){ lsSet(LS_RATES, job.items); toast("Saved. New jobs will start with these rates."); return; }
+  if(t.id==="addX"){ job.extras.push({id:uid(), desc:"", qty:1, unit:"", rate:0}); save(); renderPane(); return; }
+  if(t.id==="addHrs"){ job.extras.push({id:uid(), desc:"Labour", qty:8, unit:"hr", rate:120}); save(); renderPane(); return; }
+  if(t.id==="copyQuote" || t.id==="copyCsv"){ copy(quoteText(t.id==="copyCsv")); if(["lead","estimating"].includes(job.status)){ setStatus(job,"quoted"); renderJobs(); } }
+});
+function scrollToMeas(m){
+  const [x,y] = centroid(m.pts), sc = $("scroller"), st = $("stage");
+  sc.scrollTo({left: st.offsetLeft + x*zoom - sc.clientWidth/2, top: st.offsetTop + y*zoom - sc.clientHeight/2, behavior:"smooth"});
+}
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick = ()=>{ tab = b.dataset.tab; renderPane(); try{ sessionStorage.setItem("conest.tab", tab); }catch(e){} });
+
+/* ---------- helpers: modal, toast, copy ---------- */
+let modalCancel = null;
+function modal(html, init, onCancel){
+  modalCancel = onCancel||null;
+  $("modalHost").innerHTML = `<div class="modal"><div class="box" role="dialog" aria-modal="true">${html}</div></div>`;
+  const box = $("modalHost").querySelector(".box");
+  box.querySelectorAll("[data-close]").forEach(b=>b.onclick = ()=>{ closeModal(); modalCancel && modalCancel(); });
+  init && init(box);
+}
+function closeModal(){ $("modalHost").innerHTML = ""; }
+function confirmBox(title, text, okLabel, ok){
+  modal(`<h2>${esc(title)}</h2><p class="hint" style="font-size:15px">${esc(text)}</p><div class="actions"><button class="btn primary" id="cfOk">${esc(okLabel)}</button><button class="btn" data-close>Cancel</button></div>`,
+    box=>box.querySelector("#cfOk").onclick = ()=>{ closeModal(); ok(); });
+}
+let toastT = null;
+function toast(t){ let el = document.querySelector(".toast"); if(!el){ el = document.createElement("div"); el.className="toast"; el.setAttribute("role","status"); document.body.appendChild(el); }
+  el.textContent = t; clearTimeout(toastT); toastT = setTimeout(()=>el.remove(), 3200); }
+async function copy(text){
+  try{ await navigator.clipboard.writeText(text); toast("Copied"); }
+  catch(e){ modal(`<h2>Copy this</h2><textarea id="cpTa" readonly>${esc(text)}</textarea><div class="actions"><button class="btn" data-close>Done</button></div>`, box=>{ const ta = box.querySelector("#cpTa"); ta.focus(); ta.select(); }); }
+}
+
+/* ---------- jobs ---------- */
+function renderJobs(){
+  $("jobSel").innerHTML = S.jobs.map(j=>`<option value="${j.id}" ${j.id===S.currentId?"selected":""}>${esc(j.name)}</option>`).join("");
+  if(job && typeof STATUSES!=="undefined"){ $("jobStatus").innerHTML = STATUSES.map(s=>`<option value="${s.id}" ${s.id===job.status?"selected":""}>${s.name}</option>`).join(""); $("jobStatus").style.setProperty("--stc", stOf(job.status).c); }
+}
+async function switchJob(id){
+  job = S.jobs.find(j=>j.id===id) || S.jobs[0]; S.currentId = job.id; save();
+  selId = null; renderJobs(); setTool("pan"); renderPane(); await loadJobPdf();
+}
+$("jobSel").onchange = e=>switchJob(e.target.value);
+const newJobModal = ()=>modal(`<h2>New job</h2><label class="field">Job name <input type="text" id="njName" placeholder="e.g. 12 Smith St, Kangaroo Flat" style="width:100%"></label>
+  <label class="field">Builder / client <input type="text" id="njClient" placeholder="e.g. Murray Wearne Builders" style="width:100%"></label>
+  <label class="field">Site address <input type="text" id="njAddr" style="width:100%"></label>
+  <div class="actions"><button class="btn primary" id="njOk">Create and load PDF</button><button class="btn" data-close>Cancel</button></div>`, box=>{
+    const inp = box.querySelector("#njName"); setTimeout(()=>inp.focus(),30);
+    const go = async ()=>{ const j = newJob(inp.value.trim() || "Job "+(S.jobs.length+1)); j.status = "estimating"; j.client = box.querySelector("#njClient").value.trim(); j.address = box.querySelector("#njAddr").value.trim();
+      S.jobs.push(j); closeModal(); await switchJob(j.id); showView("job"); $("pdfFile").click(); };
+    box.querySelector("#njOk").onclick = go; inp.onkeydown = e=>{ if(e.key==="Enter") go(); };
+  });
+$("newJob").onclick = newJobModal;
+const pickPdf = ()=>{ if(job.meas.length && !job.sample) confirmBox("Replace the plan?", "This job already has measurements. They'll stay, but they may not line up with a different PDF.", "Choose PDF", ()=>$("pdfFile").click()); else $("pdfFile").click(); };
+$("loadPdf").onclick = pickPdf; $("emptyLoad").onclick = pickPdf;
+$("pdfFile").onchange = async e=>{
+  const f = e.target.files[0]; e.target.value = ""; if(!f) return;
+  const buf = await f.arrayBuffer();
+  if(job.sample){ const j = newJob(f.name.replace(/\.pdf$/i,"")); S.jobs.push(j); job = j; S.currentId = j.id; renderJobs(); renderPane(); }
+  job.pdfName = f.name; job.page = 1; job.autoDone = false; job.aiPending = true; job.ai = null; job.areas = job.areas.filter(a=>a.src!=="ai"); save();
+  await pdfPut(job.id, buf.slice(0));
+  try{ await openPdf(buf); maybeStartAi(); toast(`Loaded ${f.name}`); setTool(job.scales[pageNum]?"pan":"scale"); }catch(err){ toast("Couldn't open that PDF. Is it a valid PDF file?"); }
+  refreshViewer();
+};
+$("jobMenu").onclick = ()=>modal(`<h2>${esc(job.name)}</h2>
+  <label class="field">Name <input type="text" id="jmName" value="${esc(job.name)}" style="width:100%"></label>
+  <label class="field">Builder / client <input type="text" id="jmClient" value="${esc(job.client||"")}" style="width:100%"></label>
+  <label class="field">Site address <input type="text" id="jmAddr" value="${esc(job.address||"")}" style="width:100%"></label>
+  <p class="hint">Plan: ${esc(job.pdfName||"none")}. Jobs are saved in this browser only. Copy a backup to move a job to another device (the PDF itself isn't in the backup, so load it again there).</p>
+  <div class="actions"><button class="btn primary" id="jmSave">Save</button><button class="btn" id="jmBackup">Copy backup</button><button class="btn" id="jmRestore">Restore a backup</button><button class="btn danger" id="jmDel">Delete job</button><button class="btn" data-close>Close</button></div>`, box=>{
+  box.querySelector("#jmSave").onclick = ()=>{ job.name = box.querySelector("#jmName").value.trim()||job.name; job.client = box.querySelector("#jmClient").value.trim(); job.address = box.querySelector("#jmAddr").value.trim(); job.updated = Date.now(); save(); renderJobs(); renderPane(); closeModal(); };
+  box.querySelector("#jmBackup").onclick = ()=>{ const {sample, ...j} = job; copy(JSON.stringify({conest:1, job:j})); };
+  box.querySelector("#jmRestore").onclick = ()=>modal(`<h2>Restore a backup</h2><textarea id="rsTa" placeholder="Paste the backup text here"></textarea><div class="actions"><button class="btn primary" id="rsOk">Restore as new job</button><button class="btn" data-close>Cancel</button></div>`, b2=>{
+    b2.querySelector("#rsOk").onclick = async ()=>{ try{ const d = JSON.parse(b2.querySelector("#rsTa").value); if(!d.job || !Array.isArray(d.job.meas)) throw 0;
+      const j = {...newJob(""), ...d.job, id:uid()}; S.jobs.push(j); closeModal(); await switchJob(j.id); toast("Restored. Load the PDF for this job."); }
+      catch(e){ toast("That doesn't look like a Con Est backup."); } };
+  });
+  box.querySelector("#jmDel").onclick = ()=>confirmBox(`Delete "${job.name}"?`, "Its measurements and saved PDF are removed from this browser. This can't be undone.", "Delete job", async ()=>{
+    const id = job.id; S.jobs = S.jobs.filter(j=>j.id!==id); pdfDel(id);
+    if(!S.jobs.length) S.jobs.push(sampleJob());
+    await switchJob(S.jobs[0].id); });
+});
+
+/* ---------- viewer input ---------- */
+const ov = $("ov"), scroller = $("scroller");
+ov.addEventListener("click", onPlanClick);
+ov.addEventListener("pointermove", e=>{ if(draft && e.pointerType==="mouse"){ hover = evtPt(e); drawOverlay(); } });
+ov.addEventListener("pointerleave", ()=>{ if(hover){ hover = null; drawOverlay(); } });
+let drag = null, dragMoved = false;
+scroller.addEventListener("pointerdown", e=>{
+  dragMoved = false;
+  if(e.pointerType!=="mouse") return;
+  if(e.button===1 || (e.button===0 && (tool==="pan" || e.target===scroller))){
+    drag = {x:e.clientX, y:e.clientY, l:scroller.scrollLeft, t:scroller.scrollTop}; $("viewer").classList.add("dragging"); e.preventDefault();
+  }
+});
+window.addEventListener("pointermove", e=>{ if(!drag) return; const dx = e.clientX-drag.x, dy = e.clientY-drag.y; if(Math.abs(dx)+Math.abs(dy)>3) dragMoved = true; scroller.scrollLeft = drag.l-dx; scroller.scrollTop = drag.t-dy; });
+window.addEventListener("pointerup", ()=>{ if(drag){ drag = null; $("viewer").classList.remove("dragging"); setTimeout(()=>dragMoved=false,0); } });
+// Ctrl + wheel (or trackpad pinch) zooms; a plain wheel scrolls
+scroller.addEventListener("wheel", e=>{ if(!pdfDoc || !(e.ctrlKey || e.metaKey)) return; e.preventDefault(); zoomAt(zoom*Math.exp(-e.deltaY*0.0015), e.clientX, e.clientY); }, {passive:false});
+// two-finger pinch on phones and tablets
+let pinch = null;
+scroller.addEventListener("touchstart", e=>{ if(e.touches.length===2 && pdfDoc){ const [a,b] = e.touches; pinch = {d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY), z:zoom}; dragMoved = true; } }, {passive:true});
+scroller.addEventListener("touchmove", e=>{ if(pinch && e.touches.length===2){ e.preventDefault(); const [a,b] = e.touches; const d = Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY); zoomAt(pinch.z*d/pinch.d, (a.clientX+b.clientX)/2, (a.clientY+b.clientY)/2); } }, {passive:false});
+scroller.addEventListener("touchend", e=>{ if(e.touches.length<2) pinch = null; });
+$("zoomIn").onclick = ()=>zoomAt(zoom*1.25); $("zoomOut").onclick = ()=>zoomAt(zoom/1.25); $("zoomFit").onclick = ()=>pdfDoc && zoomFit();
+$("pgPrev").onclick = ()=>{ if(pageNum>1){ cancelDraft(); pageNum--; showPage(true); } };
+$("pgNext").onclick = ()=>{ if(pdfDoc && pageNum<pdfDoc.numPages){ cancelDraft(); pageNum++; showPage(true); } };
+$("dFinish").onclick = finishDraft; $("dUndo").onclick = undoPoint; $("dCancel").onclick = cancelDraft;
+document.querySelectorAll("#tools button").forEach(b=>b.onclick = ()=>setTool(b.dataset.tool));
+window.addEventListener("keydown", e=>{
+  if(e.key==="Shift") shiftDown = true;
+  if(e.target.closest("input,textarea,select") || $("modalHost").innerHTML) { if(e.key==="Escape" && $("modalHost").innerHTML){ closeModal(); modalCancel && modalCancel(); } return; }
+  if(e.key==="Escape") cancelDraft();
+  else if(e.key==="Enter") finishDraft();
+  else if(e.key==="Backspace"){ if(draft){ e.preventDefault(); undoPoint(); } }
+  else if(e.key==="Delete" && selId){ job.meas = job.meas.filter(m=>m.id!==selId); selId = null; save(); renderPane(); drawOverlay(); }
+  else { const t = {p:"pan", s:"scale", r:"room", a:"area", w:"wall", l:"line", c:"count"}[e.key.toLowerCase()]; if(t && !e.ctrlKey && !e.metaKey) setTool(t); }
+});
+window.addEventListener("keyup", e=>{ if(e.key==="Shift") shiftDown = false; });
+let rzT = null, lastW = window.innerWidth;
+window.addEventListener("resize", ()=>{ clearTimeout(rzT); rzT = setTimeout(()=>{ if(!pdfDoc) return; if(Math.abs(window.innerWidth-lastW)>40) zoomFit(); else applyZoom(); lastW = window.innerWidth; }, 150); });
+
+/* ---------- jobs hub: statuses, dashboard, jobs list ---------- */
+const STATUSES = [
+  {id:"lead", name:"Lead", c:"#7A869A"}, {id:"estimating", name:"Estimating", c:"#1F5FD1"}, {id:"quoted", name:"Quote sent", c:"#B76E00"},
+  {id:"won", name:"Won", c:"#1E7B4B"}, {id:"progress", name:"In progress", c:"#7B3FC4"}, {id:"complete", name:"Complete", c:"#0B7285"}, {id:"lost", name:"Lost", c:"#B42318"}];
+const stOf = id => STATUSES.find(s=>s.id===id) || STATUSES[1];
+const stChip = id => { const s = stOf(id); return `<span class="st" style="--stc:${s.c}">${s.name}</span>`; };
+const stSelect = (j, extra="") => `<select class="st" style="--stc:${stOf(j.status).c}" data-jst="${j.id}" aria-label="Status" ${extra}>${STATUSES.map(s=>`<option value="${s.id}" ${s.id===(j.status||"estimating")?"selected":""}>${s.name}</option>`).join("")}</select>`;
+S.settings = Object.assign({painters:3, dayRate:960, sat:false}, S.settings||{});
+S.jobs.forEach(j=>{ j.status = j.status || "estimating"; j.client = j.client || ""; j.address = j.address || ""; });
+let view = "dash", jobFilter = "active", jobSearch = "";
+
+function quoteFor(j){ const keep = job; job = j; try{ return quoteLines(); } finally { job = keep; } }
+function setStatus(j, st){
+  if(j.status===st) return; j.status = st;
+  if(st==="quoted" && !j.quotedAt) j.quotedAt = Date.now();
+  if(["won","lost"].includes(st)) j.decidedAt = Date.now();
+  save();
+}
+
+function showView(v){
+  view = v; try{ sessionStorage.setItem("conest.view", v); }catch(e){}
+  ["dash","jobs","sched","job"].forEach(k=>{ $("v"+k[0].toUpperCase()+k.slice(1)).hidden = k!==v; });
+  document.querySelectorAll(".side [data-view]").forEach(b=>{ if(b.dataset.view===v) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
+  if(v==="dash") renderDash();
+  if(v==="jobs") renderJobList();
+  if(v==="sched") renderSched();
+  if(v==="job"){ renderJobs(); renderPane(); if(pdfDoc) requestAnimationFrame(()=>zoomFit()); }
+}
+async function openJob(id, t){ if(t){ tab = t; } if(!job || job.id!==id) await switchJob(id); showView("job"); if(t) renderPane(); }
+document.querySelectorAll(".side [data-view]").forEach(b=>b.onclick = ()=>showView(b.dataset.view));
+$("toJobs").onclick = ()=>showView("jobs");
+
+function renderDash(){
+  const now = Date.now(), DAY = 864e5, qs = S.jobs.filter(j=>!j.sample).map(j=>({j, q:quoteFor(j)}));
+  const sum = a => a.reduce((s,x)=>s+x.q.ex,0);
+  const out = qs.filter(x=>x.j.status==="quoted"), wonWait = qs.filter(x=>x.j.status==="won"), live = qs.filter(x=>x.j.status==="progress");
+  const decided = qs.filter(x=>["won","progress","complete","lost"].includes(x.j.status));
+  const wins = decided.filter(x=>x.j.status!=="lost").length;
+  const today = isoDay(new Date()), in14 = isoDay(new Date(now+14*DAY));
+  const starts = qs.map(x=>({...x, s:jobSpan(x.j)})).filter(x=>x.s && x.s.end>=today && x.s.start<=in14).sort((a,b)=>a.s.start.localeCompare(b.s.start));
+  const follow = out.filter(x=>x.j.quotedAt && now-x.j.quotedAt>7*DAY).sort((a,b)=>a.j.quotedAt-b.j.quotedAt);
+  const load = crewLoad(today, 20), cap = S.settings.painters*load.days.length, booked = load.days.reduce((s,d)=>s+d.n,0);
+  const recent = [...qs].sort((a,b)=>(b.j.updated||b.j.created||0)-(a.j.updated||a.j.created||0)).slice(0,6);
+  $("vDash").innerHTML = `<div class="hub">
+    <div class="hubhead"><h1>Dashboard</h1><button class="btn" data-go="sched">Open schedule</button><button class="btn primary" data-newjob>New job</button></div>
+    <div class="kpis">
+      <div class="card kpi"><div class="lbl">Quotes out</div><div class="val num">${money0(sum(out))}</div><div class="sub">${out.length} quote${out.length===1?"":"s"} waiting on an answer</div></div>
+      <div class="card kpi"><div class="lbl">Won, not started</div><div class="val num">${money0(sum(wonWait))}</div><div class="sub">${wonWait.length} job${wonWait.length===1?"":"s"}${live.length?`, plus ${live.length} in progress (${money0(sum(live))})`:""}</div></div>
+      <div class="card kpi"><div class="lbl">Win rate</div><div class="val num">${decided.length?Math.round(wins/decided.length*100)+"%":"–"}</div><div class="sub">${decided.length?`${wins} won of ${decided.length} decided`:"Mark quotes won or lost to see this"}</div></div>
+      <div class="card kpi"><div class="lbl">Painters booked, next 4 weeks</div><div class="val num">${cap?Math.round(booked/cap*100):0}%</div><div class="sub">${fmt(booked,0)} of ${fmt(cap,0)} painter-days (${S.settings.painters} painters)</div></div>
+    </div>
+    <div class="cols">
+      <div class="card"><h2>On site in the next 2 weeks</h2><div class="list">${starts.length?starts.map(x=>`<a data-open="${x.j.id}" data-t="schedule"><span class="grow"><b>${esc(x.j.name)}</b> <span class="muted">${esc(x.j.client)}</span></span><span class="muted" style="white-space:nowrap">${dShort(x.s.start)} – ${dShort(x.s.end)}</span></a>`).join(""):`<p class="hint">Nothing booked. Set a start date on a job's Schedule tab.</p>`}</div></div>
+      <div class="card"><h2>Quotes to follow up</h2><div class="list">${follow.length?follow.map(x=>`<a data-open="${x.j.id}" data-t="quote"><span class="grow"><b>${esc(x.j.name)}</b> <span class="muted">${esc(x.j.client)}</span></span><span class="num">${money0(x.q.ex)}</span><span class="muted">${Math.floor((now-x.j.quotedAt)/DAY)} days</span></a>`).join(""):`<p class="hint">No quotes older than a week waiting on an answer.</p>`}</div></div>
+    </div>
+    <div class="card"><h2>Recent jobs</h2><div class="list">${recent.length?recent.map(x=>`<a data-open="${x.j.id}"><span class="grow"><b>${esc(x.j.name)}</b> <span class="muted">${esc(x.j.client)}</span></span>${stChip(x.j.status)}<span class="num" style="min-width:96px;text-align:right">${money0(x.q.ex)}</span></a>`).join(""):`<p class="hint">No jobs yet. Start one with <b>New job</b> and load the plans.</p>`}</div></div>
+  </div>`;
+}
+const money0 = n => n.toLocaleString("en-AU",{style:"currency",currency:"AUD",maximumFractionDigits:0});
+
+function renderJobList(){
+  const rows = S.jobs.map(j=>({j, q:quoteFor(j), s:jobSpan(j)}));
+  const active = r => !["complete","lost"].includes(r.j.status);
+  const real = list => list.filter(r=>!r.j.sample);
+  const cnt = id => rows.filter(r=>r.j.status===id);
+  const filt = rows.filter(r=>(jobFilter==="all" || (jobFilter==="active" ? active(r) : r.j.status===jobFilter)) &&
+    (!jobSearch || (r.j.name+" "+r.j.client+" "+r.j.address).toLowerCase().includes(jobSearch.toLowerCase())))
+    .sort((a,b)=>(b.j.updated||b.j.created||0)-(a.j.updated||a.j.created||0));
+  const stageBtn = (id, name, list) => `<button data-filter="${id}" aria-pressed="${jobFilter===id}"><b>${name}</b><span>${real(list).length} · ${money0(real(list).reduce((s,r)=>s+r.q.ex,0))}</span></button>`;
+  $("vJobs").innerHTML = `<div class="hub">
+    <div class="hubhead"><h1>Jobs</h1><input type="text" class="search" id="jobSearch" placeholder="Search jobs or builders" value="${esc(jobSearch)}" aria-label="Search jobs"><button class="btn primary" data-newjob>New job</button></div>
+    <div class="stages">${stageBtn("active","Active",rows.filter(active))}${STATUSES.map(s=>stageBtn(s.id, s.name, cnt(s.id))).join("")}${stageBtn("all","All",rows)}</div>
+    <div class="card" style="padding:4px 8px;overflow-x:auto"><table class="jt"><thead><tr><th>Job</th><th>Builder / client</th><th>Status</th><th class="r">Quote ex GST</th><th>On site</th><th>Plans</th></tr></thead><tbody>
+    ${filt.map(r=>`<tr data-open="${r.j.id}"><td><div class="nm">${esc(r.j.name)}</div>${r.j.address?`<div class="sub">${esc(r.j.address)}</div>`:""}</td><td>${esc(r.j.client)||'<span class="muted">–</span>'}</td>
+      <td>${stSelect(r.j)}</td><td class="r num">${r.q.ex?money(r.q.ex):'<span class="muted">–</span>'}</td>
+      <td style="white-space:nowrap">${r.s?`${dShort(r.s.start)} – ${dShort(r.s.end)}`:'<span class="muted">Not booked</span>'}</td><td class="sub">${esc(r.j.pdfName)||"–"}</td></tr>`).join("") || `<tr><td colspan="6" class="hint" style="padding:16px 6px">No jobs here.</td></tr>`}
+    </tbody></table></div></div>`;
+  const si = $("jobSearch"); si.oninput = ()=>{ jobSearch = si.value; const p = si.selectionStart; renderJobList(); const n = $("jobSearch"); n.focus(); n.setSelectionRange(p,p); };
+}
+
+// clicks shared by the hub views
+document.querySelector(".app").addEventListener("click", async e=>{
+  if(e.target.closest("select,input")) return;
+  const t = e.target.closest("[data-open],[data-filter],[data-newjob],[data-go],[data-sched]"); if(!t) return;
+  if(t.dataset.filter){ jobFilter = t.dataset.filter; renderJobList(); return; }
+  if(t.dataset.go){ showView(t.dataset.go); return; }
+  if(t.hasAttribute("data-newjob")){ newJobModal(); return; }
+  if(t.dataset.sched){ await openJob(t.dataset.sched, "schedule"); return; }
+  if(t.dataset.open){ await openJob(t.dataset.open, t.dataset.t); return; }
+});
+document.querySelector(".app").addEventListener("change", e=>{
+  const t = e.target;
+  if(t.dataset.jst){ const j = S.jobs.find(x=>x.id===t.dataset.jst); if(!j) return; setStatus(j, t.value); t.style.setProperty("--stc", stOf(t.value).c);
+    if(view==="jobs") renderJobList(); if(view==="dash") renderDash(); if(j===job) renderJobs(); }
+});
+$("jobStatus").onchange = e=>{ setStatus(job, e.target.value); renderJobs(); };
+
+/* ---------- scheduling ---------- */
+const isoDay = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const parseDay = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); };
+const addDays = (s, n) => { const d = parseDay(s); d.setDate(d.getDate()+n); return isoDay(d); };
+const isWork = s => { const w = parseDay(s).getDay(); return w!==0 && (w!==6 || S.settings.sat); };
+const nextWork = s => { while(!isWork(s)) s = addDays(s,1); return s; };
+const addWork = (s, n) => { s = nextWork(s); while(n>0){ s = nextWork(addDays(s,1)); n--; } return s; };   // n working days after s
+const dShort = s => parseDay(s).toLocaleDateString("en-AU",{weekday:"short", day:"numeric", month:"short"});
+const TASK_COLORS = ["#1F5FD1","#2B8A3E","#D9480F","#7B3FC4","#0B7285","#C2255C","#B76E00","#5C7CFA"];
+
+// Lay the tasks end to end on working days. Half days share a day with the next task.
+function taskDates(j){
+  const sc = j.sched; if(!sc || !sc.start || !sc.tasks.length) return [];
+  let off = 0; const start = nextWork(sc.start);
+  return sc.tasks.map((t,i)=>{ const d = Math.max(0.5, +t.days||0.5);
+    const a = addWork(start, Math.floor(off)), b = addWork(start, Math.ceil(off+d)-1); off += d;
+    return {...t, i, from:a, to:b, color:TASK_COLORS[i%TASK_COLORS.length]}; });
+}
+function jobSpan(j){ const td = taskDates(j); return td.length ? {start:td[0].from, end:td[td.length-1].to, tasks:td} : null; }
+// painters a job has on site that day: half-day stages share a day, so take the biggest crew, not the sum
+const dayCrew = (td, d) => td.reduce((m,t)=>d>=t.from && d<=t.to ? Math.max(m, +t.crew||0) : m, 0);
+// painters booked each working day from `from`, for `n` working days
+function crewLoad(from, n){
+  const days = []; let d = nextWork(from); for(let i=0;i<n;i++){ days.push({d, n:0}); d = addWork(d,1); }
+  S.jobs.forEach(j=>{ if(["lost","complete"].includes(j.status) || j.sample) return;
+    const td = taskDates(j); days.forEach(x=>{ x.n += dayCrew(td, x.d); }); });
+  return {days};
+}
+// Split the quote into painting stages. Days = quote ex GST ÷ (painters × $ per painter-day).
+function buildTasks(j){
+  const q = quoteFor(j), sc = j.sched, crew = Math.max(1, +sc.crew||2), rate = +S.settings.dayRate||960;
+  const extIds = ["eaves","ext","posts"], ext = q.lines.filter(l=>extIds.includes(l.itemId)).reduce((s,l)=>s+l.amount,0);
+  const int = q.ex - ext, days = v => Math.max(0.5, Math.round(v/rate/crew*2)/2);
+  const T = [];
+  if(int>0) [["Prep, fill & sand",.15],["Ceilings",.20],["Walls",.35],["Doors, frames & skirts",.20],["Touch-ups & clean",.10]].forEach(([n,f])=>T.push({id:uid(), name:n, days:days(int*f), crew}));
+  if(ext>0) T.splice(Math.max(0,T.length-1), 0, {id:uid(), name:"Exterior: eaves, posts & downpipes", days:days(ext), crew});
+  sc.tasks = T;
+}
+function paneSchedule(){
+  const sc = job.sched = job.sched || {start:"", crew:2, tasks:[]};
+  const q = quoteLines(), td = taskDates(job), pd = sc.tasks.reduce((s,t)=>s+(+t.days||0)*(+t.crew||0),0);
+  let h = `<h3>${esc(job.name)}</h3>
+    <div class="fields"><label class="field">Start date<input type="date" id="scStart" value="${sc.start||""}"></label>
+      <label class="field">Painters<input type="number" id="scCrew" min="1" step="1" value="${sc.crew||2}"></label>
+      <button class="btn" id="scBuild">${sc.tasks.length?"Rebuild from quote":"Build from quote"}</button></div>`;
+  if(!sc.tasks.length) return h + `<p class="hint">Builds the stages from the quote (${money(q.ex)} ex GST) at ${money(+S.settings.dayRate)} per painter-day, then you adjust the days. Change that rate in Settings.</p>`;
+  h += `<div style="overflow-x:auto"><table class="tasks"><thead><tr><th>Stage</th><th class="r">Days</th><th class="r">Painters</th><th>Dates</th><th></th></tr></thead><tbody>
+    ${sc.tasks.map((t,i)=>{ const d = td[i]; return `<tr><td><input type="text" data-tk="${t.id}" data-f="name" value="${esc(t.name)}" aria-label="Stage name" style="border-left:4px solid ${TASK_COLORS[i%TASK_COLORS.length]}"></td>
+      <td class="r"><input type="number" min="0.5" step="0.5" data-tk="${t.id}" data-f="days" value="${t.days}" aria-label="Days"></td>
+      <td class="r"><input type="number" min="0" step="1" data-tk="${t.id}" data-f="crew" value="${t.crew}" aria-label="Painters"></td>
+      <td style="font-size:12px;white-space:nowrap">${d?`${dShort(d.from)}${d.to!==d.from?" – "+dShort(d.to):""}`:'<span class="muted">set a start</span>'}</td>
+      <td style="white-space:nowrap">${i?`<button class="btn sm" data-tkup="${t.id}" aria-label="Move up">↑</button>`:""}<button class="btn sm danger" data-tkdel="${t.id}" aria-label="Delete stage">✕</button></td></tr>`; }).join("")}
+    </tbody></table></div>
+    <div class="actions"><button class="btn" id="scAdd">Add stage</button><button class="btn" id="scWait">Add wait (builder)</button></div>
+    <div class="totals"><span>On site</span><span>${td.length?`${dShort(td[0].from)} – ${dShort(td[td.length-1].to)}`:"–"}</span>
+      <span>Painter-days</span><span class="num">${fmt(pd,1)}</span><span>Labour at ${money(+S.settings.dayRate)}/day</span><span class="num">${money(pd*(+S.settings.dayRate||0))}</span><span>Quote ex GST</span><span class="num">${money(q.ex)}</span></div>
+    <div class="actions"><button class="btn primary" id="scIcs">Add to calendar (.ics)</button><button class="btn" data-go="sched">See all jobs</button></div>
+    <p class="hint">A wait stage with 0 painters holds a gap, e.g. while the builder fits cabinets before the final coat.</p>`;
+  return h;
+}
+$("pane").addEventListener("input", e=>{
+  const t = e.target; if(!job || tab!=="schedule") return; const sc = job.sched;
+  if(t.id==="scCrew"){ sc.crew = Math.max(1, +t.value||1); save(); return; }
+  if(t.dataset.tk){ const k = sc.tasks.find(x=>x.id===t.dataset.tk); if(!k) return; k[t.dataset.f] = t.type==="number" ? +t.value||0 : t.value; touch(); }
+});
+$("pane").addEventListener("change", e=>{
+  const t = e.target; if(!job || tab!=="schedule") return;
+  if(t.id==="scStart"){ job.sched.start = t.value; if(t.value && ["quoted","estimating","lead"].includes(job.status)) setStatus(job,"won"); touch(); rerenderPane(); renderJobs(); }
+  if(t.dataset.tk && t.dataset.f!=="name") rerenderPane();
+});
+$("pane").addEventListener("click", e=>{
+  const t = e.target.closest("button"); if(!t || !job || tab!=="schedule") return; const sc = job.sched;
+  if(t.id==="scBuild"){ const go = ()=>{ buildTasks(job); touch(); rerenderPane(); };
+    if(sc.tasks.length) confirmBox("Rebuild the stages?", "Your edited stages are replaced with fresh ones from the quote.", "Rebuild", go); else go(); }
+  if(t.id==="scAdd"){ sc.tasks.push({id:uid(), name:"New stage", days:1, crew:sc.crew||2}); touch(); rerenderPane(); }
+  if(t.id==="scWait"){ sc.tasks.push({id:uid(), name:"Wait for builder", days:5, crew:0}); touch(); rerenderPane(); }
+  if(t.dataset.tkdel){ sc.tasks = sc.tasks.filter(x=>x.id!==t.dataset.tkdel); touch(); rerenderPane(); }
+  if(t.dataset.tkup){ const i = sc.tasks.findIndex(x=>x.id===t.dataset.tkup); if(i>0){ [sc.tasks[i-1], sc.tasks[i]] = [sc.tasks[i], sc.tasks[i-1]]; touch(); rerenderPane(); } }
+  if(t.id==="scIcs") exportIcs([job]);
+  if(t.dataset.go) showView(t.dataset.go);
+});
+function touch(){ if(job) job.updated = Date.now(); save(); }
+function rerenderPane(){ const sc = $("pane").scrollTop; renderPane(); $("pane").scrollTop = sc; }
+
+let schedFrom = null;
+function renderSched(){
+  const mon = d => { const x = parseDay(d); x.setDate(x.getDate() - ((x.getDay()+6)%7)); return isoDay(x); };
+  schedFrom = schedFrom || mon(isoDay(new Date()));
+  const NDAYS = 42, CW = 30, today = isoDay(new Date()), days = [...Array(NDAYS)].map((_,i)=>addDays(schedFrom,i)), last = days[NDAYS-1];
+  const jobs = S.jobs.filter(j=>!j.sample && j.status!=="lost").map(j=>({j, s:jobSpan(j)}));
+  const on = jobs.filter(x=>x.s && x.s.end>=schedFrom && x.s.start<=last).sort((a,b)=>a.s.start.localeCompare(b.s.start));
+  const unbooked = jobs.filter(x=>!x.s && ["won","progress","quoted"].includes(x.j.status));
+  const col = d => days.indexOf(d) + 2;
+  const load = days.map(d=>({d, n:isWork(d) ? on.reduce((s,x)=>s+dayCrew(x.s.tasks, d),0) : null}));
+  let g = `<div class="gantt" style="grid-template-columns:var(--lw) repeat(${NDAYS}, ${CW}px)"><div class="corner" style="grid-row:1/3"></div>`;
+  for(let w=0; w<NDAYS; w+=7) g += `<div class="gh wk" style="grid-row:1;grid-column:${w+2}/span 7">${parseDay(days[w]).toLocaleDateString("en-AU",{day:"numeric",month:"short"})}</div>`;
+  days.forEach((d,i)=>{ g += `<div class="gh" style="grid-row:2;grid-column:${i+2}${d===today?";color:var(--accent);font-weight:700":""}">${"SMTWTFS"[parseDay(d).getDay()]}<br>${parseDay(d).getDate()}</div>`; });
+  on.forEach((x,r)=>{ const row = r+3;
+    g += `<div class="gl" style="grid-row:${row};grid-column:1" data-sched="${x.j.id}"><b>${esc(x.j.name)}</b><span>${stOf(x.j.status).name}${x.j.client?" · "+esc(x.j.client):""}</span></div>`;
+    days.forEach((d,i)=>{ g += `<div class="gd${isWork(d)?"":" we"}${d===today?" today":""}" style="grid-row:${row};grid-column:${i+2}"></div>`; });
+    x.s.tasks.forEach(t=>{ if(t.to<schedFrom || t.from>last) return; const a = Math.max(2, col(t.from)), b = t.to>last ? NDAYS+2 : col(t.to)+1;
+      g += `<div class="gbar" data-drag="${x.j.id}" title="${esc(t.name)}: ${dShort(t.from)} – ${dShort(t.to)}, ${t.crew} painter${t.crew==1?"":"s"}" style="grid-row:${row};grid-column:${a}/${b};background:${+t.crew?t.color:"#8893A2"}">${esc(t.name)}</div>`; });
+  });
+  const lr = on.length+3;
+  g += `<div class="gl" style="grid-row:${lr};grid-column:1;cursor:default"><b>Painters booked</b><span>of ${S.settings.painters} available</span></div>`;
+  load.forEach((x,i)=>{ g += `<div class="gload${x.n>S.settings.painters?" over":""}" style="grid-row:${lr};grid-column:${i+2}">${x.n==null?"":x.n||""}</div>`; });
+  g += `</div>`;
+  const over = load.filter(x=>x.n>S.settings.painters);
+  $("vSched").innerHTML = `<div class="hub" style="max-width:none">
+    <div class="hubhead"><h1>Schedule</h1><button class="btn" id="gPrev" aria-label="Earlier">‹</button><button class="btn" id="gToday">Today</button><button class="btn" id="gNext" aria-label="Later">›</button><button class="btn" id="gIcs">Export all (.ics)</button></div>
+    ${over.length?`<div class="warns"><div>Over-booked on ${over.length} day${over.length===1?"":"s"} (${over.slice(0,4).map(x=>dShort(x.d)).join(", ")}${over.length>4?"…":""}). Move a job or add painters in Settings.</div></div>`:""}
+    ${on.length?`<div class="gwrap">${g}</div><p class="hint">Drag a bar to move that job. Click a job name to edit its stages.</p>`:`<div class="card"><p class="hint" style="margin:0">No jobs booked in these 6 weeks. Open a job, go to its Schedule tab and set a start date.</p></div>`}
+    ${unbooked.length?`<div class="card"><h2>Not booked yet</h2><div class="list">${unbooked.map(x=>`<div class="li" data-sched="${x.j.id}"><span class="grow"><b>${esc(x.j.name)}</b> <span class="muted">${esc(x.j.client)}</span></span>${stChip(x.j.status)}<span class="num">${money0(quoteFor(x.j).ex)}</span><button class="btn sm" data-sched="${x.j.id}">Schedule</button></div>`).join("")}</div></div>`:""}
+  </div>`;
+  $("gPrev").onclick = ()=>{ schedFrom = addDays(schedFrom,-14); renderSched(); };
+  $("gNext").onclick = ()=>{ schedFrom = addDays(schedFrom,14); renderSched(); };
+  $("gToday").onclick = ()=>{ schedFrom = null; renderSched(); };
+  $("gIcs").onclick = ()=>exportIcs(S.jobs.filter(j=>!j.sample && j.status!=="lost" && jobSpan(j)));
+  // drag a bar sideways to move the whole job, a calendar day per column
+  document.querySelectorAll("#vSched .gbar").forEach(el=>el.onpointerdown = e=>{
+    const j = S.jobs.find(x=>x.id===el.dataset.drag), x0 = e.clientX; let dd = 0;
+    const bars = [...document.querySelectorAll(`#vSched .gbar[data-drag="${j.id}"]`)];
+    el.setPointerCapture(e.pointerId); bars.forEach(b=>b.classList.add("drag"));
+    el.onpointermove = ev=>{ dd = Math.round((ev.clientX-x0)/CW); bars.forEach(b=>b.style.transform = `translateX(${dd*CW}px)`); };
+    el.onpointerup = ()=>{ el.onpointermove = el.onpointerup = null;
+      if(dd){ j.sched.start = nextWork(addDays(jobSpan(j).start, dd)); j.updated = Date.now(); save(); toast(`${j.name} now starts ${dShort(j.sched.start)}`); }
+      renderSched(); };
+  });
+}
+
+/* calendar export: one all-day event per stage */
+async function exportIcs(list){
+  const st = d => d.replace(/-/g,""), now = new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");
+  const icsEsc = s => String(s).replace(/[\;,]/g, m=>"\\"+m).replace(/\n/g,"\\n");
+  const ev = [];
+  list.forEach(j=>taskDates(j).forEach(t=>ev.push(["BEGIN:VEVENT", `UID:${j.id}-${t.id}@conest`, `DTSTAMP:${now}`, `DTSTART;VALUE=DATE:${st(t.from)}`, `DTEND;VALUE=DATE:${st(addDays(t.to,1))}`,
+    `SUMMARY:${icsEsc(`${j.name}: ${t.name}${+t.crew?` (${t.crew} painters)`:""}`)}`, j.address?`LOCATION:${icsEsc(j.address)}`:"", "END:VEVENT"].filter(Boolean).join("\r\n"))));
+  if(!ev.length){ toast("Nothing booked to export yet."); return; }
+  const ics = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Con Est//Schedule//EN","CALSCALE:GREGORIAN",...ev,"END:VCALENDAR"].join("\r\n");
+  const name = (list.length===1 ? list[0].name : "painting-schedule").replace(/[^\w\- ]+/g,"").trim().replace(/\s+/g,"-") + ".ics";
+  try{ const dl = window.claude && await window.claude.use("downloads");
+    if(dl){ await dl.save({filename:name, data:ics}); return; } }catch(e){ if(e && e.code && e.code!=="unavailable") { toast("Download cancelled."); return; } }
+  try{ const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([ics],{type:"text/calendar"})); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+  catch(e){ copy(ics); }
+}
+
+/* settings */
+$("navSettings").onclick = ()=>modal(`<h2>Settings</h2>
+  <label class="field">Painters available (your crew)<input type="number" id="stP" min="1" step="1" value="${S.settings.painters}"></label>
+  <label class="field">Production per painter per day ($, sets how many days a quote takes)<input type="number" id="stR" min="100" step="10" value="${S.settings.dayRate}"></label>
+  <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="stSat" ${S.settings.sat?"checked":""}> Work Saturdays</label>
+  <p class="hint">Default ${money(960)} = 8 hours at $120. Rates for pricing are on each job's Rates tab.</p>
+  <div class="actions"><button class="btn primary" id="stOk">Save</button><button class="btn" data-close>Cancel</button></div>`, box=>{
+  box.querySelector("#stOk").onclick = ()=>{ S.settings.painters = Math.max(1, +box.querySelector("#stP").value||1); S.settings.dayRate = Math.max(1, +box.querySelector("#stR").value||960);
+    S.settings.sat = box.querySelector("#stSat").checked; save(); closeModal(); showView(view); toast("Settings saved"); };
+});
+
+/* ---------- boot ---------- */
+try{ tab = sessionStorage.getItem("conest.tab") || "takeoff"; }catch(e){}
+let bootView = "dash"; try{ bootView = sessionStorage.getItem("conest.view") || "dash"; }catch(e){}
+switchJob(S.currentId).then(()=>showView(bootView));
+</script>

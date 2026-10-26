@@ -74,6 +74,7 @@ aside{width:380px;max-width:100%;display:flex;flex-direction:column;background:v
 .tabs button{flex:1;border:0;background:transparent;padding:10px 6px;font-family:var(--f-head);font-weight:600;font-size:17px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);border-bottom:3px solid transparent}
 .tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
 .pane{flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:14px;min-height:0}
+.pane>*{flex-shrink:0}
 .pane h3{margin:0;font-family:var(--f-head);font-weight:600;font-size:16px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
 .group{display:flex;flex-direction:column;gap:6px}
 .ghead{display:flex;align-items:center;gap:8px;font-weight:600}
@@ -193,6 +194,13 @@ select.st{border:0;appearance:none;-webkit-appearance:none;cursor:pointer;paddin
   .jobview main{flex-direction:column;flex:none;min-height:auto}
   .jobview>*{flex:none}
 }
+.tour{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(380px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--accent);border-radius:10px;padding:14px 16px;box-shadow:0 8px 28px rgba(0,0,0,.28);z-index:45;display:flex;flex-direction:column;gap:8px}
+.tour h2{margin:0;font-family:var(--f-head);font-size:22px}
+.tour p{margin:0;line-height:1.5}
+.tdots{display:flex;gap:5px}
+.tdots i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.tdots i.on{background:var(--accent)}
+@media (max-width:820px){ .tour{bottom:calc(72px + env(safe-area-inset-bottom,0px));left:16px;right:16px;width:auto} }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
@@ -1189,8 +1197,8 @@ function paneQuote(){
   h += `</tbody></table></div>
     <div class="totals"><span>Subtotal (ex GST)</span><span class="num">${money(q.ex)}</span><span>GST ${fmt(+job.gst,1)}%</span><span class="num">${money(q.gst)}</span><span class="big">Total inc GST</span><span class="big num">${money(q.inc)}</span></div>
     ${q.options.length?`<h3>Options (not in total)</h3><div style="overflow-x:auto"><table><thead><tr><th>Option</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Ex GST</th><th class="r">Inc GST</th></tr></thead><tbody>${q.options.map(o=>`<tr><td>${esc(o.desc)}</td><td class="r num">${fmt(o.qty, o.unit==="ea"?0:2)} ${esc(o.unit)}</td><td class="r num">${money(o.rate)}</td><td class="r num">${money(o.amount)}</td><td class="r num">${money(o.inc)}</td></tr>`).join("")}</tbody></table></div>`:""}
-    <div class="actions"><button class="btn primary" id="copyQuote">Copy quote</button><button class="btn" id="copyCsv">Copy for spreadsheet</button></div>
-    <p class="hint">Qty is rounded to 2 decimals before pricing, so the lines match when you key them into Xero (qty × unit price). Check the scale on each page against a written dimension before sending.</p>`;
+    <div class="actions"><button class="btn" id="copyQuote">Copy itemised quote</button><button class="btn" id="copyCsv">Copy for spreadsheet</button></div>
+    <p class="hint">Qty is rounded to 2 decimals before pricing, so the lines match when you key them into Xero (qty × unit price).</p>` + paneXero(q);
   return h;
 }
 function quoteText(tabs){
@@ -1610,13 +1618,84 @@ $("navSettings").onclick = ()=>modal(`<h2>Settings</h2>
   <label class="field">Production per painter per day ($, sets how many days a quote takes)<input type="number" id="stR" min="100" step="10" value="${S.settings.dayRate}"></label>
   <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="stSat" ${S.settings.sat?"checked":""}> Work Saturdays</label>
   <p class="hint">Default ${money(960)} = 8 hours at $120. Rates for pricing are on each job's Rates tab.</p>
-  <div class="actions"><button class="btn primary" id="stOk">Save</button><button class="btn" data-close>Cancel</button></div>`, box=>{
+  <label class="field">Standard wording under "Includes" on Xero quotes<textarea id="stTail" rows="7" style="font-family:var(--f-ui);font-size:14px;min-height:140px">${esc(S.settings.xeroTail)}</textarea></label>
+  <div class="actions"><button class="btn primary" id="stOk">Save</button><button class="btn" id="stTour">Show the tutorial</button><button class="btn" data-close>Cancel</button></div>`, box=>{
+  box.querySelector("#stTour").onclick = ()=>{ closeModal(); tourShow(0); };
   box.querySelector("#stOk").onclick = ()=>{ S.settings.painters = Math.max(1, +box.querySelector("#stP").value||1); S.settings.dayRate = Math.max(1, +box.querySelector("#stR").value||960);
-    S.settings.sat = box.querySelector("#stSat").checked; save(); closeModal(); showView(view); toast("Settings saved"); };
+    S.settings.sat = box.querySelector("#stSat").checked; S.settings.xeroTail = box.querySelector("#stTail").value.trim(); save(); closeModal(); showView(view); toast("Settings saved"); };
 });
+
+/* ---------- Xero-ready quote in First Class Finishes' format ---------- */
+const XERO_TAIL = `Excludes any paint work to joinery.
+
+Excludes any external coatings to cladding.
+
+Builder to supply access.
+
+Allowance for minor patching and gapping of painted to painted substrates as required.
+
+Allowance for three (3) coat ultra premium paint system.`;
+S.settings.xeroTail = S.settings.xeroTail ?? XERO_TAIL;
+function xeroIncludes(j){
+  const q = quoteFor(j), has = id => q.lines.some(l=>l.itemId===id && l.qty>0);
+  const out = has("floor") || has("walls") || has("ceil") ? ["Ceilings","Walls and skirts","Doors and frames"] : [];
+  if((j.areas||[]).some(a=>a.include && /alfresco|portico|verandah|porch|patio|deck/i.test(a.label)) || has("eaves")) out.push("Soffits");
+  if(has("eaves")) out.push("Eaves");
+  if(has("ext")) out.push("External render / cladding");
+  if(has("posts")) out.push("Posts and downpipes");
+  return out;
+}
+function xeroText(j){
+  const inc = xeroIncludes(j), ext = inc.some(x=>/Eaves|External|Posts|Soffits/.test(x));
+  return `Project: ${j.name}\nScope:\n${ext?"Internal and external":"Internal"} paint works as per supplied plans.\nIncludes:\n${inc.map(x=>"- "+x).join("\n")}${S.settings.xeroTail?"\n\n"+S.settings.xeroTail:""}`;
+}
+function paneXero(q){
+  const c = job.confirmed;
+  return `<div class="group" style="border-top:1px solid var(--line);padding-top:12px"><h3>Quote for Xero</h3>
+    ${c?`<div class="warns"><div style="background:color-mix(in srgb, var(--good) 14%, transparent);color:var(--good)">Price confirmed ${new Date(c.at).toLocaleDateString("en-AU")}: <b>${money(c.price)}</b> ex GST.${Math.abs(c.price-q.ex)>0.005?` The takeoff now says ${money(q.ex)}.`:""}</div></div>`:""}
+    <label class="field">Description (one line in Xero, qty 1)<textarea id="xText" rows="12" style="font-family:var(--f-ui);font-size:14px;min-height:220px">${esc(c?c.text:xeroText(job))}</textarea></label>
+    <div class="fields"><label class="field">Price ex GST<input type="number" id="xPrice" step="1" min="0" value="${c?c.price:r2(q.ex)}" style="width:120px"></label>
+      <span class="hint" style="padding-bottom:6px">inc GST ${money(r2((c?c.price:q.ex)*(1+(+job.gst||0)/100)))}</span></div>
+    <div class="actions"><button class="btn primary" id="xConfirm">${c?"Update confirmed price":"Confirm price"}</button><button class="btn" id="xCopyText">Copy description</button><button class="btn" id="xCopyPrice">Copy price</button>${c?`<button class="btn" id="xReset">Start again from takeoff</button>`:""}</div>
+    <p class="hint">In Xero: New quote → paste the description into one line, quantity 1, paste the price, GST on Income. Confirming marks the job as Quote sent.</p></div>`;
+}
+$("pane").addEventListener("click", e=>{
+  const t = e.target.closest("button"); if(!t || !job || tab!=="quote") return;
+  const text = ()=>$("xText").value, price = ()=>r2(+$("xPrice").value||0);
+  if(t.id==="xConfirm"){ job.confirmed = {price:price(), text:text(), at:Date.now()}; setStatus(job,"quoted"); touch(); renderJobs(); rerenderPane(); copy(text()); toast(`Price confirmed at ${money(price())}. Description copied.`); }
+  if(t.id==="xCopyText") copy(text());
+  if(t.id==="xCopyPrice") copy(price().toFixed(2));
+  if(t.id==="xReset") confirmBox("Start again from the takeoff?", "The confirmed price and edited description are cleared and rebuilt from the current takeoff.", "Start again", ()=>{ job.confirmed = null; touch(); rerenderPane(); });
+});
+
+/* ---------- first-run tutorial ---------- */
+const TOUR = [
+  {v:"dash", t:"Welcome to Con Est", b:"Load a builder's PDF plans and the app does the takeoff and prices it at your rates. It also tracks your quotes and books your painters. This takes a minute."},
+  {v:"dash", t:"1. Set up your crew", b:"Open <b>Settings</b> (bottom of the menu). Enter how many painters you have and what one painter turns over in a day. That's what the schedule uses to work out how long a job takes."},
+  {v:"jobs", t:"2. Start a job", b:"In <b>Jobs</b>, tap <b>New job</b>. Enter the address and builder, then pick the PDF plans. The takeoff starts by itself. It reads the scale (and checks it against the written dimensions), the area schedule, eaves, downpipes and posts."},
+  {v:"job", tab:"takeoff", t:"3. Check the takeoff", b:"The <b>Takeoff</b> tab lists what was found. Tap a line to see it highlighted on the plan. Untick anything that shouldn't be priced, like a shed built by others. Measure anything extra with Area, Length or Count."},
+  {v:"job", tab:"rates", t:"4. Your rates", b:"<b>Rates</b> holds your $/m², eaves $/lm and $ each for downpipes and posts. Tap <b>Save as default</b> so every new job starts with them. Doors, windows and trims can be priced as options outside the total."},
+  {v:"job", tab:"quote", t:"5. Confirm the price and send it", b:"<b>Quote</b> shows the total. Scroll to <b>Quote for Xero</b>, tweak the wording or round the price, then tap <b>Confirm price</b>. It copies the description in your usual format. Paste it into a new Xero quote, then copy the price."},
+  {v:"jobs", t:"6. Keep jobs moving", b:"Change a job's status as it goes: Quote sent, Won, In progress, Complete. The <b>Dashboard</b> shows quotes out, your win rate and quotes older than a week to chase."},
+  {v:"sched", t:"7. Book it in", b:"On a won job, open its <b>Schedule</b> tab, set the start date and painters, and tap <b>Build from quote</b>. The <b>Schedule</b> board shows every job. Drag to move one, watch for over-booked days, and export to your calendar."},
+  {v:"dash", t:"8. On your phone", b:"Android: open the link in Chrome, then <b>⋮ → Install app</b>. iPhone: open it in Safari, then <b>Share → Add to Home Screen</b>. Jobs are saved on each device, so use <b>Job… → Copy backup</b> to move one across. You can replay this tour from Settings."}];
+let tourAt = -1;
+function tourShow(i){
+  tourAt = i; const s = TOUR[i]; let el = document.getElementById("tour");
+  if(!el){ el = document.createElement("div"); el.id = "tour"; el.className = "tour"; el.setAttribute("role","dialog"); el.setAttribute("aria-label","Tutorial"); document.body.appendChild(el); }
+  if(s.tab){ tab = s.tab; } showView(s.v);
+  el.innerHTML = `<div class="tdots">${TOUR.map((_,k)=>`<i${k===i?' class="on"':""}></i>`).join("")}</div><h2>${s.t}</h2><p>${s.b}</p>
+    <div class="actions"><button class="btn primary" id="tNext">${i===TOUR.length-1?"Done":"Next"}</button>${i?`<button class="btn" id="tBack">Back</button>`:""}<button class="btn" id="tSkip" style="margin-left:auto">${i===TOUR.length-1?"Close":"Skip"}</button></div>`;
+  el.querySelector("#tNext").onclick = ()=> i===TOUR.length-1 ? tourEnd() : tourShow(i+1);
+  el.querySelector("#tSkip").onclick = tourEnd;
+  const bk = el.querySelector("#tBack"); if(bk) bk.onclick = ()=>tourShow(i-1);
+  el.querySelector("#tNext").focus();
+}
+function tourEnd(){ tourAt = -1; const el = document.getElementById("tour"); if(el) el.remove(); try{ localStorage.setItem("conest.toured","1"); }catch(e){} showView("dash"); }
+function tourSeen(){ try{ return localStorage.getItem("conest.toured")==="1"; }catch(e){ return true; } }
 
 /* ---------- boot ---------- */
 try{ tab = sessionStorage.getItem("conest.tab") || "takeoff"; }catch(e){}
 let bootView = "dash"; try{ bootView = sessionStorage.getItem("conest.view") || "dash"; }catch(e){}
-switchJob(S.currentId).then(()=>showView(bootView));
+switchJob(S.currentId).then(()=>{ showView(bootView); if(!tourSeen()) tourShow(0); });
 </script>
